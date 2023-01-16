@@ -1,0 +1,53 @@
+﻿  CVProject.cpp
+D:\dev\CVProject\CVProject\CVProject.cpp(18,39): warning C4305: 'initializing': truncation from 'double' to 'float'
+D:\dev\CVProject\CVProject\CVProject.cpp(79,61): warning C4244: 'argument': conversion from 'float' to '_Tp', possible loss of data
+          with
+          [
+              _Tp=int
+          ]
+D:\dev\CVProject\CVProject\CVProject.cpp(141,25): warning C4244: '=': conversion from 'double' to '_Tp', possible loss of data
+          with
+          [
+              _Tp=int
+          ]
+D:\dev\CVProject\CVProject\CVProject.cpp(142,25): warning C4244: '=': conversion from 'double' to '_Tp', possible loss of data
+          with
+          [
+              _Tp=int
+          ]
+D:\dev\CVProject\CVProject\CVProject.cpp(148,27): warning C4244: '=': conversion from 'double' to '_Tp', possible loss of data
+          with
+          [
+              _Tp=int
+          ]
+D:\dev\CVProject\CVProject\CVProject.cpp(149,27): warning C4244: '=': conversion from 'double' to '_Tp', possible loss of data
+          with
+          [
+              _Tp=int
+          ]
+D:\dev\CVProject\CVProject\CVProject.cpp(254,49): warning C4244: 'argument': conversion from 'double' to 'float', possible loss of data
+D:\dev\CVProject\CVProject\CVProject.cpp(254,100): warning C4244: 'argument': conversion from 'double' to 'float', possible loss of data
+D:\dev\CVProject\CVProject\CVProject.cpp(287,41): warning C4305: 'initializing': truncation from 'double' to 'float'
+D:\dev\CVProject\CVProject\CVProject.cpp(353,48): warning C4244: 'argument': conversion from 'double' to 'T', possible loss of data
+          with
+          [
+              T=float
+          ]
+D:\dev\CVProject\CVProject\CVProject.cpp(360,30): warning C4244: 'argument': conversion from 'double' to '_Ty', possible loss of data
+          with
+          [
+              _Ty=float
+          ]
+D:\dev\CVProject\CVProject\CVProject.cpp(395,46): warning C4305: 'initializing': truncation from 'double' to 'float'
+D:\dev\CVProject\CVProject\CVProject.cpp(453,65): warning C4267: 'initializing': conversion from 'size_t' to 'int', possible loss of data
+D:\dev\CVProject\CVProject\CVProject.cpp(480,25): warning C4244: 'initializing': conversion from '__int64' to 'int', possible loss of data
+D:\dev\CVProject\CVProject\CVProject.cpp(501,96): warning C4244: '=': conversion from '__int64' to 'int', possible loss of data
+D:\dev\CVProject\CVProject\CVProject.cpp(537,29): warning C4244: 'initializing': conversion from 'double' to 'float', possible loss of data
+D:\dev\CVProject\CVProject\CVProject.cpp(538,29): warning C4244: 'initializing': conversion from 'double' to 'float', possible loss of data
+D:\dev\CVProject\CVProject\CVProject.cpp(539,29): warning C4244: 'initializing': conversion from 'double' to 'float', possible loss of data
+D:\dev\CVProject\CVProject\CVProject.cpp(540,29): warning C4244: 'initializing': conversion from 'double' to 'float', possible loss of data
+D:\dev\CVProject\CVProject\CVProject.cpp(541,27): warning C4244: 'initializing': conversion from 'double' to 'float', possible loss of data
+D:\dev\CVProject\CVProject\CVProject.cpp(588,32): warning C4244: 'argument': conversion from 'double' to 'float', possible loss of data
+D:\dev\CVProject\CVProject\CVProject.cpp(694,28): warning C4101: 'e': unreferenced local variable
+D:\dev\CVProject\CVProject\CVProject.cpp(717,28): warning C4101: 'e': unreferenced local variable
+  CVProject.vcxproj -> D:\dev\CVProject\x64\Debug\CVProject.exe
