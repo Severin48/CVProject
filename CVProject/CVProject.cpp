@@ -82,22 +82,6 @@ cv::Mat getFrame(cv::VideoCapture& cap) {
     return ret;
 }
 
-std::vector<Point2f> pointVecToTwofVec(std::vector<Point>& vec) {
-    std::vector<Point2f> ret;
-    for (Point p : vec) {
-        ret.push_back((Point2f)p);
-    }
-    return ret;
-}
-
-std::vector<Point> twofVecToPointVec(std::vector<Point2f>& vec) {
-    std::vector<Point> ret;
-    for (Point2f p : vec) {
-        ret.push_back((Point)p);
-    }
-    return ret;
-}
-
 cv::Mat rotate_image(cv::Mat& src, double angle, vector<Point>& corners) {
     std::cout << "Rotating image..." << std::endl;
     angle = angle * (180 / CV_PI);
@@ -106,15 +90,8 @@ cv::Mat rotate_image(cv::Mat& src, double angle, vector<Point>& corners) {
     cv::Mat rot_mat = getRotationMatrix2D(center, angle, 1.);
     cv::Mat rotate_dst;
     warpAffine(src, rotate_dst, rot_mat, src.size());
-    imshow("Rotated", rotate_dst);
+    //imshow("Rotated", rotate_dst);
 
-    std::vector<Point2f> inPoints = pointVecToTwofVec(corners);
-    std::vector<Point2f> outPoints;
-
-    std::cout << "Corners before" << std::endl;
-    for (Point corner : corners) {
-        cout << corner.x << " " << corner.y << " " << std::endl;
-    }
     std::vector<Point3d> newCornersRot;
     for (Point p : corners) {
         newCornersRot.push_back(Point3d(p.x, p.y, 1));
@@ -125,15 +102,61 @@ cv::Mat rotate_image(cv::Mat& src, double angle, vector<Point>& corners) {
         pDst = (rot_mat * Mat(newCornersRot[i])).t();
 
         corners[i] = Point(pDst);
-        cout << newCornersRot[i] << " ---> " << pDst << "\n";
+        cout << newCornersRot[i] << " --> " << pDst << "\n";
 
     }
     return rotate_dst;
 }
 
 double euclideanDist(cv::Point p1, cv::Point p2) {
-    double leng;
-    return leng = sqrt(pow(p2.x - p1.x, 2) + pow(p2.y - p1.y, 2));
+    return sqrt(pow(p2.x - p1.x, 2) + pow(p2.y - p1.y, 2));
+}
+
+double vecLen(Vec4i vec) {
+    return euclideanDist(Point(vec[0], vec[1]), Point(vec[2], vec[3]));
+}
+
+double vecLen(Point p) {
+    return euclideanDist(p, Point(0,0));
+}
+
+std::pair<Point, Point> pointsFromVec4i(cv::Vec4i line) {
+    return { Point(line[0], line[1]), Point(line[2], line[3]) };
+}
+
+Vec4i unitVec(Vec4i vec) {
+    std::pair<Point, Point> points = pointsFromVec4i(vec);
+    Point p1 = points.first;
+    Point p2 = points.second;
+    double length = vecLen(vec);
+    Vec4i unitvec = vec / length;
+    return unitvec;
+}
+
+double distBetweenLines(Vec4i pVec, Vec4i qVec) {
+    Point p1 = Point(pVec[0], pVec[1]);
+    Point p2 = Point(pVec[2], pVec[3]);
+    Point q = Point(qVec[0], qVec[1]);
+    return vecLen((q - p1) - ((q-p1).dot(p2-p1) / pow(euclideanDist(p1, p2), 2))*(p2-p1));
+}
+
+double getMaxDistLines(std::vector<Vec4i> lines, std::pair<Vec4i, Vec4i>& farthestLines) {
+    // Lines are parallel within the group --> Only one unit vec needed
+    double maxDist = 0;
+    double dist = 0;
+    for (Vec4i outerLine : lines) {
+        //Vec4i unVec = unitVec(outerLine);
+        for (Vec4i innerLine : lines) {
+            dist = distBetweenLines(outerLine, innerLine);
+            if (dist > maxDist) {
+                maxDist = dist;
+                farthestLines.first = outerLine;
+                farthestLines.second = innerLine;
+            }
+        }
+    }
+    cout << "Max dist between lines: " << maxDist << endl;
+    return maxDist;
 }
 
 cv::Point midpoint(const cv::Point& a, const cv::Point& b) {
@@ -149,6 +172,8 @@ cv::Point midpoint(const cv::Vec4i& v) {
     ret.y = (v[1] + v[3]) / 2.;
     return ret;
 }
+
+
 
 std::pair<cv::Point, cv::Point> adjustLineLen(cv::Point p1, cv::Point p2, double newLen) {
     // TODO
@@ -263,7 +288,7 @@ double getSquareLength(cv::VideoCapture& cap, double angle1, double angle2, floa
 
         std::cout << "Median square length: " << medianLen << std::endl;
 
-        imshow("LinesSquare", linesImg);
+        //imshow("LinesSquare", linesImg);
 
         frames.clear();
 
@@ -428,8 +453,8 @@ Board getBoard(cv::VideoCapture& cap) {
         int mean_y = 0;
         std::vector<int> g1Indices = groupedIndices[p.first];
         std::vector<int> g2Indices = groupedIndices[p.second];
-        std::vector< cv::Vec4i> g1Lines;
-        std::vector< cv::Vec4i> g2Lines;
+        std::vector<cv::Vec4i> g1Lines;
+        std::vector<cv::Vec4i> g2Lines;
         std::vector<double> distancesToCenterG1;
         std::vector<double> distancesToCenterG2;
         for (auto i : g1Indices) {
@@ -469,14 +494,73 @@ Board getBoard(cv::VideoCapture& cap) {
         // Distanz zu beiden weitesten Linien errechnen und falls die größere dieser beiden Distanzen < 75 % maxDist, dann verwerfe Linie!
         // Dann für Gruppe 2 genau das gleiche
 
-        for (auto l : g1Lines) {
+        float distance_percentage = 0.85;
+
+        bool added = false;
+        cout << "G1 lines: " << g1Lines.size() << endl;
+        std::pair<Vec4i, Vec4i> farthestLinesG1;
+        double g1maxDist = getMaxDistLines(g1Lines, farthestLinesG1);
+        double dist = 0;
+        vector<Vec4i> filteredLines;
+        vector<Vec4i> g1LinesFiltered;
+        for (Vec4i outerLine : g1Lines) {
+            added = false;
+            if (outerLine == farthestLinesG1.first || outerLine == farthestLinesG1.second) { continue; }
+            for (Vec4i innerLine : g1Lines) {
+                if (innerLine == farthestLinesG1.first || innerLine == farthestLinesG1.second) { continue; }
+                dist = distBetweenLines(outerLine, innerLine);
+                if (dist >= distance_percentage * g1maxDist) {
+                    if (!added) {
+                        filteredLines.push_back(outerLine);
+                        g1LinesFiltered.push_back(outerLine);
+                        added = true;
+                    }
+                }
+            }
+        }
+        Mat filteredLinesImg(frame);
+        for (Vec4i l : filteredLines) {
+            line(filteredLinesImg, Point(l[0], l[1]), Point(l[2], l[3]), cv::Scalar(0, 255, 0), 1, cv::LINE_AA);
+        }
+
+        added = false;
+        cout << "G2 lines: " << g2Lines.size() << endl;
+        std::pair<Vec4i, Vec4i> farthestLinesG2;
+        vector<Vec4i> g2LinesFiltered;
+        double g2maxDist = getMaxDistLines(g2Lines, farthestLinesG2);
+        filteredLines.clear();
+        for (Vec4i outerLine : g2Lines) {
+            added = false;
+            if (outerLine == farthestLinesG2.first || outerLine == farthestLinesG2.second) { continue; }
+            for (Vec4i innerLine : g2Lines) {
+                if (innerLine == farthestLinesG2.first || innerLine == farthestLinesG2.second) { continue; }
+                dist = distBetweenLines(outerLine, innerLine);
+                if (dist >= distance_percentage * g2maxDist) {
+                    if (!added) {
+                        added = true;
+                        filteredLines.push_back(outerLine);
+                        g2LinesFiltered.push_back(outerLine);
+                    }
+                }
+            }
+        }
+        for (Vec4i l : filteredLines) {
+            line(filteredLinesImg, Point(l[0], l[1]), Point(l[2], l[3]), cv::Scalar(0, 255, 0), 1, cv::LINE_AA);
+        }
+
+        //imshow("Filtered Lines", filteredLinesImg);
+        cout << "Filtered lines: " << filteredLines.size() << endl;
+
+        // TODO: Use filtered lines + filteredG1Lines + filteredG2Lines
+
+        for (auto l : g1LinesFiltered) {
             cv::Point p1 = cv::Point(l[0], l[1]);
             cv::Point p2 = cv::Point(l[2], l[3]);
             distancesToCenterG1.push_back(euclideanDist(midpoint(p1, p2), boardCenter));
             //std::cout << euclideanDist(midpoint(p1, p2), boardCenter) << std::endl;
         }
 
-        for (auto l : g2Lines) {
+        for (auto l : g2LinesFiltered) {
             cv::Point p1 = cv::Point(l[0], l[1]);
             cv::Point p2 = cv::Point(l[2], l[3]);
             distancesToCenterG2.push_back(euclideanDist(midpoint(p1, p2), boardCenter));
@@ -488,9 +572,9 @@ Board getBoard(cv::VideoCapture& cap) {
         double smallest = distancesToCenterG1[smallestIdx];
         double second = DBL_MAX;
         int secondIdx = -1;
-        cv::Point midSmallest = midpoint(g1Lines[smallestIdx]);
+        cv::Point midSmallest = midpoint(g1LinesFiltered[smallestIdx]);
         for (int i = 0; i < distancesToCenterG1.size(); i++) {
-            double distToFirstLine = euclideanDist(midSmallest, midpoint(g1Lines[i]));
+            double distToFirstLine = euclideanDist(midSmallest, midpoint(g1LinesFiltered[i]));
             double d = distancesToCenterG1[i];
             if (d <= second && i != smallestIdx && d < distToFirstLine) {
                 secondIdx = i;
@@ -502,16 +586,16 @@ Board getBoard(cv::VideoCapture& cap) {
 
         if (smallestIdx == -1 || secondIdx == -1) return Board();
 
-        boardLimits.push_back(g1Lines[smallestIdx]);
-        boardLimits.push_back(g1Lines[secondIdx]);
+        boardLimits.push_back(g1LinesFiltered[smallestIdx]);
+        boardLimits.push_back(g1LinesFiltered[secondIdx]);
 
         smallestIdx = std::min_element(distancesToCenterG2.begin(), distancesToCenterG2.end()) - distancesToCenterG2.begin();
         smallest = distancesToCenterG2[smallestIdx];
         secondIdx = -1;
         second = DBL_MAX;
-        midSmallest = midpoint(g2Lines[smallestIdx]);
+        midSmallest = midpoint(g2LinesFiltered[smallestIdx]);
         for (int i = 0; i < distancesToCenterG2.size(); i++) {
-            double distToFirstLine = euclideanDist(midSmallest, midpoint(g2Lines[i]));
+            double distToFirstLine = euclideanDist(midSmallest, midpoint(g2LinesFiltered[i]));
             double d = distancesToCenterG2[i];
             if (d <= second && i != smallestIdx && d < distToFirstLine) {
                 secondIdx = i;
@@ -523,8 +607,8 @@ Board getBoard(cv::VideoCapture& cap) {
 
         if (smallestIdx == -1 || secondIdx == -1) return Board();
 
-        boardLimits.push_back(g2Lines[smallestIdx]);
-        boardLimits.push_back(g2Lines[secondIdx]);
+        boardLimits.push_back(g2LinesFiltered[smallestIdx]);
+        boardLimits.push_back(g2LinesFiltered[secondIdx]);
 
         std::vector<cv::Point> corners;
 
@@ -550,34 +634,27 @@ Board getBoard(cv::VideoCapture& cap) {
         double angle1 = avgAngles[p.first];
         std::vector<cv::Point> rotatedCorners(corners); // Create copy of corners
         cv::Mat rotated = rotate_image(frame, angle1, rotatedCorners);
+        cout << "Rotated corners:\n" << rotatedCorners << endl;
         cv::Point center = cv::Point(frame.cols / 2, frame.rows / 2);
 
-        double angle2 = avgAngles[p.second];
-        int minX = INT_MAX;
-        int maxY = -1;
-        Point topLeft = Point(INT_MAX, INT_MAX);
-        Point botRight = Point(0, 0);
-        int tolerancePxs = 20;
-        for (Point p : rotatedCorners) {
-            if (p.x < minX && p.y < topLeft.y - tolerancePxs) {
-                minX = p.x;
-                topLeft = p;
-            }
-        }
-        for (Point p : rotatedCorners) {
-            if (p.y > maxY && p.x > botRight.x + tolerancePxs) {
-                maxY = p.y;
-                botRight = p;
-            }
-        }
-        if (minX == INT_MAX || maxY == -1) { return Board(); }
-        cv::Rect roi = cv::Rect(topLeft, botRight);
-        Mat rotatedCpy = rotated.clone();
-        cv::rectangle(rotatedCpy, roi, cv::Scalar(255, 0, 0), 1, cv::LINE_AA);
-        imshow("Rotated roi", rotatedCpy);
-        double squareLen = getSquareLength(cap, angle1, angle2, meanSideLen, roi);
+        //double angle2 = avgAngles[p.second];
 
-        std::pair<cv::Point, cv::Point> correctedLine1 = adjustLineLen(rotatedCorners[0], rotatedCorners[1], squareLen);
+        int tolerancePxs = 20;
+        Point topLeft = Point(INT_MAX - tolerancePxs, INT_MAX - tolerancePxs);
+        Point botRight = Point(0, 0);
+        int minSum = INT_MAX;
+        int maxSum = -1;
+        for (Point p : rotatedCorners) {
+            int sum = p.x + p.y;
+            if (sum < minSum) { minSum = sum; topLeft = p; }
+            if (sum > maxSum) { maxSum = sum; botRight = p; }
+        }
+
+        cout << "Top left: " << topLeft << ", botRight: " << botRight << endl;
+
+        cv::Rect roi = cv::Rect(topLeft, botRight);
+        if (roi.width < 20 || roi.height < 20) { cerr << "ROI too small" << endl; return Board(); }
+        imshow("Rotated roi", rotated(roi));
 
         line(dst, corners[0], corners[1], cv::Scalar(255, 0, 0), 1, cv::LINE_AA);
         line(dst, corners[0], corners[2], cv::Scalar(0, 255, 0), 1, cv::LINE_AA);
@@ -589,10 +666,9 @@ Board getBoard(cv::VideoCapture& cap) {
         line(rotated, rotatedCorners[3], rotatedCorners[1], cv::Scalar(0, 0, 255), 1, cv::LINE_AA);
         line(rotated, rotatedCorners[3], rotatedCorners[2], cv::Scalar(255, 255, 0), 1, cv::LINE_AA);
 
-        imshow("Rotated", rotated);
+        //imshow("Rotated", rotated);
         imshow(w_name, dst);
-
-        return Board(corners, 8*squareLen, roi);
+        return Board(corners, meanSideLen, roi);
 
         // TODO: Gruppierung in Funktion mostPrevalentGroups ausbauen --> Kann dann auch für Gruppen von Feldgrößen genutzt werden --> Kann bei der Erkennung der Brettbegrenzung helfen
         // Insbesondere bei der Größe der Begrenzungslinien! (Ca. 8*Feldgröße = Brettgröße), aber vorsicht, boardCenter liegt nicht genau in der Mitte.
@@ -768,8 +844,8 @@ int main()
 
     cv::setMouseCallback("Lines", onClickLines, 0);
 
-    cv::namedWindow("Rotated");
-    cv::setMouseCallback("Rotated", onClickLines, 0);
+    //cv::namedWindow("Rotated");
+    //cv::setMouseCallback("Rotated", onClickLines, 0);
 
     // TODO: cv::findChessboardCorners() https://docs.opencv.org/4.x/dc/dbb/tutorial_py_calibration.html
     //cv::namedWindow("ChessCorners");
