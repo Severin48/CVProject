@@ -869,10 +869,21 @@ int main()
     //Board b = getBoard(cap); // Replace later with loop below
     // TODO: Keep trying to locate the board
     Board b = Board();
-    while (!b.located) {
-        b = getBoard(cap);
-        cv::waitKey(100);
+
+    bool acceptedBoard = false;
+    while(!acceptedBoard) {
+        while (!b.located) {
+            b = getBoard(cap);
+            cv::waitKey(100);
+        }
+        cout << "Accept board? [Enter]" << endl; // TODO: Fix
+        char key = (char)waitKey(0);
+        cout << "Key: " << key << endl;
+        if (((char)10 == key)) {
+            acceptedBoard = true;
+        }
     }
+    cout << "Board accepted." << endl;
     //while (true) {
     //    b = getBoard(cap);
     //    cv::waitKey(100);
