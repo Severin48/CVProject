@@ -1,352 +1,66 @@
-#include <iostream>
-#include <opencv2/opencv.hpp>
-#include <opencv2/imgproc.hpp>
-#include <opencv2/core/utils/logger.hpp>
-#include <opencv2/calib3d.hpp>
-#include <algorithm>
-
-using namespace std;
-using namespace cv;
-
-const int defaultWidth = 640;
-const int defaultHeight = 480;
-const float defaultRatio = (float)defaultWidth / defaultHeight;
-
-map<char, char> fileMap = { {0, 'a'}, {1, 'b'}, {2, 'c'}, {3, 'd'}, {4, 'e'}, {5, 'f'}, {6, 'g'}, {7, 'h'} };
+//#include <iostream>
+//#include <opencv2/opencv.hpp>
+//#include <opencv2/imgproc.hpp>
+//#include <opencv2/core/utils/logger.hpp>
+//#include <opencv2/calib3d.hpp>
+//#include <algorithm>
+#include "CVProject.h"
 
 
-const std::string w_name = "Live";
-
-const float max_angle_deviation = 0.01;
-
-class Board {
-public:
-    std::vector<cv::Point> corners;
-    cv::Rect boardRect;
-    float sideLength = 0;
-    bool located = false;
-    cv::Rect roi;
-
-    Board() {
-    }
-
-    Board(std::vector<cv::Point> corners, cv::Rect roi) {
-        this->located = true;
-        this->roi = roi;
-        this->sideLength = roi.width;
-    }
-};
-
-class Square {
-public:
-    Point topLeft;
-    bool occupied = false;
-    string piece;
-    string name;
-    Rect rect;
-    char file;
-    char rank;
-    bool isWhite;
-
-    Square(Point tl, Rect rec, char file, char rank) { // File: Letters, Rank: Numbers
-        this->topLeft = tl;
-        this->rect = rec;
-        this->file = file;
-        this->rank = rank;
-        this->name = string() + file + rank;
-    }
-};
-
-class Piece {
-public:
-    string name;
-    Square square;
-    bool active;
-};
-
-class Game {
-public:
-    Board board;
-    vector<Square> squares;
-    vector<Piece> pieces;
-
-    Game() {
-
-    }
-
-    Game(Board b) {
-        this->board = b;
-    }
-};
-
-
-
-
-
-template <typename T>
-bool in_vec_within_tolerance(T testValue, std::vector<T>& vec, float allowedDeviation, int& idx) {
-    // TODO: Test with Point class members
-    for (int i = 0; i < vec.size(); i++) {
-        if (fabs(vec[i] - testValue) < allowedDeviation) {
-            idx = i;
-            return true;
-        }
-    }
-    return false;
-}
-
-template <typename T>
-void printVec(std::string s, std::vector<T>& vec) {
-    std::cout << s << std::endl;
-    for (auto i : vec)
-        std::cout << i << ' ' << std::endl;
-    //std::cout << std::endl;
-}
-
-template <typename T>
-bool within_tolerance(T val1, T val2, float allowedDeviation) {
-    // TODO: Test with Point class members
-    if (fabs(val2 - val1) < allowedDeviation) {
-        return true;
-    }
-    return false;
-}
-
-double median(std::vector<double>& v) {
-    size_t n = v.size() / 2;
-    std::nth_element(v.begin(), v.begin() + n, v.end());
-    return v[n];
-}
-
-cv::Mat getFrame(cv::VideoCapture& cap) {
-    cv::Mat ret;
-    while (ret.empty()) cap >> ret;
-    //std::cout << ret.cols << ", " << ret.rows << " " << std::endl;
-    float newRatio = (float)ret.cols / ret.rows;
-    if (cv::Size(ret.cols, ret.rows) != cv::Size(defaultWidth, defaultHeight)) {
-        resize(ret, ret, cv::Size(defaultWidth, defaultWidth/newRatio));
-    }
-    //std::cout << defaultWidth << ", " << defaultWidth / newRatio << " " << std::endl;
-    return ret;
-}
-
-cv::Mat rotate_image(cv::Mat& src, double angle, vector<Point>& corners) {
-    std::cout << "\nRotating image..." << std::endl;
-    angle = angle * (180 / CV_PI);
-    std::cout << "Rotation angle (deg): " << angle << std::endl;
-    cv::Point center = cv::Point(src.cols / 2, src.rows / 2);
-    cv::Mat rot_mat = getRotationMatrix2D(center, angle, 1.);
-    cv::Mat rotate_dst;
-    warpAffine(src, rotate_dst, rot_mat, src.size());
-    //imshow("Rotated", rotate_dst);
-
-    std::vector<Point3d> newCornersRot;
-    for (Point p : corners) {
-        newCornersRot.push_back(Point3d(p.x, p.y, 1));
-    }
-    cv::Mat pDst;
-    for (int i = 0; i < newCornersRot.size(); i++)
-    {
-        pDst = (rot_mat * Mat(newCornersRot[i])).t();
-
-        corners[i] = Point(pDst);
-        cout << newCornersRot[i] << " --> " << pDst << "\n";
-
-    }
-    return rotate_dst;
-}
-
-double euclideanDist(cv::Point p1, cv::Point p2) {
-    return sqrt(pow(p2.x - p1.x, 2) + pow(p2.y - p1.y, 2));
-}
-
-double vecLen(Vec4i vec) {
-    return euclideanDist(Point(vec[0], vec[1]), Point(vec[2], vec[3]));
-}
-
-double vecLen(Point p) {
-    return euclideanDist(p, Point(0,0));
-}
-
-std::pair<Point, Point> pointsFromVec4i(cv::Vec4i line) {
-    return { Point(line[0], line[1]), Point(line[2], line[3]) };
-}
-
-Vec4i unitVec(Vec4i vec) {
-    std::pair<Point, Point> points = pointsFromVec4i(vec);
-    Point p1 = points.first;
-    Point p2 = points.second;
-    double length = vecLen(vec);
-    Vec4i unitvec = vec / length;
-    return unitvec;
-}
-
-double distBetweenLines(Vec4i pVec, Vec4i qVec) {
-    Point p1 = Point(pVec[0], pVec[1]);
-    Point p2 = Point(pVec[2], pVec[3]);
-    Point q = Point(qVec[0], qVec[1]);
-    return vecLen((q - p1) - ((q-p1).dot(p2-p1) / pow(euclideanDist(p1, p2), 2))*(p2-p1));
-}
-
-double getMaxDistLines(std::vector<Vec4i> lines, std::pair<Vec4i, Vec4i>& farthestLines) {
-    // Lines are parallel within the group --> Only one unit vec needed
-    double maxDist = 0;
-    double dist = 0;
-    for (Vec4i outerLine : lines) {
-        //Vec4i unVec = unitVec(outerLine);
-        for (Vec4i innerLine : lines) {
-            dist = distBetweenLines(outerLine, innerLine);
-            if (dist > maxDist) {
-                maxDist = dist;
-                farthestLines.first = outerLine;
-                farthestLines.second = innerLine;
+void getSquareData(VideoCapture& cap, Mat& refImg, Game& g, double squareLen, bool& properlyRotated) {
+    int rowPx, colPx;
+    int nCols = 8;
+    int nRows = 8;
+    int nSquares = 64;
+    Mat frame;
+    cap >> frame; // Now containing pieces
+    Mat squareImg;
+    char fileN, rankN;
+    Scalar green = Scalar(255, 0, 0);
+    Mat rotNoBorder = refImg.clone() - green;
+    imshow("No green", rotNoBorder);
+    int colorSum;
+    int minMean = INT_MAX;
+    int maxMean = -1;
+    int whiteSquareThresh = 150;
+    bool isWhite = false;
+    if (g.squares.size() > 1) { g.squares.clear();}
+    //vector<Scalar> meanColors;
+    for (int row = 0; row < nRows; row++) {
+        for (int col = 0; col < nCols; col++) {
+            fileN = fileMap[col];
+            rankN = (char)(row + 1 + '0');
+            rowPx = (nRows - 1 - row) * squareLen;
+            colPx = col * squareLen;
+            Rect roi = Rect(Point(colPx, rowPx), Point(colPx + squareLen, rowPx + squareLen));
+            squareImg = rotNoBorder(roi);
+            cout << fileN << rankN << " --> " << rowPx << ", " << colPx;
+            Scalar meanCol = mean(squareImg);
+            colorSum = meanCol[0] + meanCol[1] + meanCol[2];
+            cout << "\t" << meanCol << ",\tSum=" << colorSum << endl;
+            if (colorSum < minMean) { minMean = colorSum; }
+            if (colorSum > maxMean) { maxMean = colorSum; }
+            if (colorSum > whiteSquareThresh) {
+                isWhite = true;
             }
-        }
-    }
-    cout << "Max dist between lines: " << maxDist << endl;
-    return maxDist;
-}
-
-cv::Point midpoint(const cv::Point& a, const cv::Point& b) {
-    cv::Point ret;
-    ret.x = (a.x + b.x) / 2.;
-    ret.y = (a.y + b.y) / 2.;
-    return ret;
-}
-
-cv::Point midpoint(const cv::Vec4i& v) {
-    cv::Point ret;
-    ret.x = (v[0] + v[2]) / 2.;
-    ret.y = (v[1] + v[3]) / 2.;
-    return ret;
-}
-
-
-
-std::pair<cv::Point, cv::Point> adjustLineLen(cv::Point p1, cv::Point p2, double newLen) {
-    // TODO
-    return std::pair(p1, p2);
-}
-
-double getAngle(cv::Point p1, cv::Point p2) {
-    double angle;
-    if (p2.x - p1.x >= DBL_EPSILON) angle = atan2(p2.y - p1.y, p2.x - p1.x);
-    else angle = CV_PI / 2.;
-    //std::cout << std::endl << "Before - Angle in degrees:\t" << angle * 180 / CV_PI << std::endl;
-    angle = angle <= -CV_PI / 2. ? angle + CV_PI : angle;
-    angle = angle >= CV_PI / 2. ? angle - CV_PI : angle;
-    return angle;
-}
-
-//cv::Point subPoints(cv::Point p1, cv::Point p2) {
-//    return cv::Point(p1.x-p2.x, p1.y-p2.y);
-//}
-
-cv::Point getIntersectionOfExtendedLines(cv::Vec4i l1, cv::Vec4i l2) {
-    cv::Point p11 = cv::Point(l1[0], l1[1]);
-    cv::Point p12 = cv::Point(l1[2], l1[3]);
-    cv::Point p21 = cv::Point(l2[0], l2[1]);
-    cv::Point p22 = cv::Point(l2[2], l2[3]);
-
-    // y = m*x + c
-    double m1, m2;
-    if (p12.x - p11.x == 0) m1 = DBL_MAX; // TODO: Nicht DBL_MAX - Gefahr von Überlauf sondern einfach p11.x, p21.y(p11.x) returnen, analog bei m2
-    else m1 = ((float)p12.y - p11.y) / (p12.x - p11.x);
-    if (p22.x - p21.x == 0) m2 = DBL_MAX;
-    else m2 = ((float)p22.y - p21.y) / (p22.x - p21.x);
-
-    double c1, c2;
-    c1 = p11.y - m1 * p11.x;
-    c2 = p21.y - m2 * p21.x;
-
-    double x_i, y_i;
-    // m1*x + c1 - y = m2*x + c2 - y --> m1x1 - m2x2 = c2 - y2 + y1 - c1 (da x1=x2, y1=y2) --> x_i = (c2-c1) / (m1-m2);
-    x_i = (c2 - c1) / (m1 - m2);
-    y_i = m1 * x_i + c1;
-    return cv::Point((int)x_i, (int)y_i);
-}
-
-
-double getSquareLength(cv::VideoCapture& cap, double angle1, double angle2, float meanSideLen, cv::Rect roi) {
-    std::cout << "Determining square length..." << std::endl;
-    double boardLen = -1;
-    double angleTolerance = 0.1;
-    while (boardLen == -1) {
-        boardLen = -1;
-        std::vector<cv::Mat> frames;
-        std::vector<cv::Vec4i> all_lines, relevantLines;
-        int nFrames = 1;
-        frames.reserve(nFrames);
-        cv::Mat frame, linesImg;
-        for (int i = 0; i < nFrames; i++) {
-            frame = getFrame(cap);
-            cv::Mat image_roi = frame(roi);
-            if (frame.empty()) continue;
-            linesImg = image_roi.clone();
-            frames.push_back(image_roi);
-            cv::Mat grayImg;
-            cvtColor(image_roi, grayImg, cv::COLOR_BGR2GRAY);
-            //imshow("Gray", grayImg);
-
-            // TODO: Vordergrund und Hintergrund --> Alles auf 0 setzen, was außerhalb der Corners ist.
-
-            cv::Mat blurGray, edges;
-            GaussianBlur(grayImg, blurGray, cv::Size(5, 5), 0);
-            //imshow("Blur gray", blurGray);
-
-            Canny(blurGray, edges, 50, 150);
-            //imshow("Edges Square", edges);
-
-            // https://stackoverflow.com/questions/45322630/how-to-detect-lines-in-opencv --> Auch für Felder nützlich
-
-            std::vector<cv::Vec4i> lines;
-            // HoughLinesP(edges, lines, 1, CV_PI / 180, 50, 10, 20); // --> Really good, but diagonals in squares
-
-            // HoughLinesP(edges, lines, 1, CV_PI / 180, 100, 10, 30); --> Very good for the board
-
-            // HoughLinesP(edges, lines, 1, CV_PI / 180, 100, 150, 30); // Also very good for the board
-
-            // HoughLinesP(edges, lines, 1, CV_PI / 180., 100, 150, 20); // --> Perfect for the board, sometimes not fully recognized --> Use multiple frames and compare results
-
-            HoughLinesP(edges, lines, 1, CV_PI / 180., 40, 10, 4); // TODO: TWEAK + Auf Bildgröße anpassen, nicht statisch
-
-            all_lines.insert(all_lines.end(), lines.begin(), lines.end());
-        }
-
-        if (all_lines.size() < 2) {
-            continue; // Potentiell endlosschleife
-        }
-
-        double angle;
-        std::vector<double> lengths;
-        for (cv::Vec4i l : all_lines) {
-            cv::Point p1, p2;
-            p1 = cv::Point(l[0], l[1]);
-            p2 = cv::Point(l[2], l[3]);
-            angle = getAngle(p1, p2);
-            if (within_tolerance(angle, angle1, angleTolerance) || within_tolerance(angle, angle2, angleTolerance)) {
-                relevantLines.push_back(l);
-                line(linesImg, p1, p2, cv::Scalar(0, 255, 0), 1, cv::LINE_AA);
-                lengths.push_back(euclideanDist(p1, p2));
+            else { isWhite = false; }
+            if (row == 0 && col == 0 && !isWhite) {
+                properlyRotated = true;
+                // cout << "Was properly rotated" << endl;
             }
-
+            else properlyRotated = false;
+            g.squares.push_back(Square(Point(colPx, rowPx), roi, fileN, rankN, meanCol, squareImg, isWhite));
+            //if (row == 1 && col == 0) circle(rotated_roi, Point(colPx, rowPx), 1, cv::Scalar(0, 255, 0), 2, 8, 0);
         }
-
-        double medianLen = median(lengths);
-
-        std::cout << "Median square length: " << medianLen << std::endl;
-
-        //imshow("LinesSquare", linesImg);
-
-        frames.clear();
-
-        boardLen = medianLen;
     }
-
-    return boardLen;
+    if (g.squares[0].isWhite) {
+        properlyRotated = false;
+    }
+    else { properlyRotated = true; }
 }
 
-Board getBoard(cv::VideoCapture& cap, Mat& refImg) {
+
+Board getBoard(cv::VideoCapture& cap, Mat& refImg, Game& game) {
     std::cout << std::endl << "Starting board detection..." << std::endl;
     cv::Mat frame, dst;
     cv::Mat linesImg;
@@ -695,12 +409,23 @@ Board getBoard(cv::VideoCapture& cap, Mat& refImg) {
         if (roi.width < 20 || roi.height < 20) { cerr << "ROI too small" << endl; return Board(); }
 
         refImg = rotated(roi);
-        imshow("Rotated roi here", refImg);
+        //imshow("Rotated roi here", refImg);
         Scalar green = cv::Scalar(255, 0, 0);
         line(dst, corners[0], corners[1], green, 1, cv::LINE_AA);
         line(dst, corners[0], corners[2], cv::Scalar(0, 255, 0), 1, cv::LINE_AA);
         line(dst, corners[3], corners[1], cv::Scalar(0, 0, 255), 1, cv::LINE_AA);
         line(dst, corners[3], corners[2], cv::Scalar(255, 255, 0), 1, cv::LINE_AA);
+
+        int squareLen = roi.width / 8; // Ist nicht schlimm wenn ein paar Pixel übrig bleiben
+
+        Board b = Board(corners, roi);
+        game = Game(b);
+        bool properlyRotated = false;
+        getSquareData(cap, refImg, game, squareLen, properlyRotated);
+        if (!properlyRotated) {
+            refImg = rotate_image(refImg, CV_PI/2., rotatedCorners);
+            getSquareData(cap, refImg, game, squareLen, properlyRotated);
+        }
 
         //line(rotated, rotatedCorners[0], rotatedCorners[1], cv::Scalar(255, 0, 0), 1, cv::LINE_AA);
         //line(rotated, rotatedCorners[0], rotatedCorners[2], cv::Scalar(0, 255, 0), 1, cv::LINE_AA);
@@ -742,147 +467,20 @@ Board getBoard(cv::VideoCapture& cap, Mat& refImg) {
     return Board();
 }
 
-void process_images(std::vector<cv::Mat>& imgs) {
-
-    for (cv::Mat img : imgs) {
-        std::cout << "Processing..." << std::endl;
-    }
-}
-
-cv::VideoCapture select_camera() {
-    cv::Mat frame;
-    cv::VideoCapture cap;
-
-    int deviceID = 1;       // USB secondary CAM for Laptop 
-    int defaultID = 0;      // 0 = open default camera
-
-    cap.open(deviceID);
-    bool opened = false;
-    opened = cap.isOpened();
-    cap >> frame;
-    if (frame.empty() || !opened || frame.data >= frame.dataend || frame.datastart == nullptr || frame.data == NULL) {
-        cap.open(defaultID);
-        opened = cap.isOpened();
-        cap >> frame;
-
-        int counter = 0;
-        for (uchar* p = frame.data; p != frame.dataend; p++) {
-            if (*p == 205 || *p == 0) {
-                counter++;
-            }
-        }
-        if (counter > frame.size().width * frame.size().height * frame.channels() / 90) {
-            cap.release();
-            opened = false;
-        }
-    }
-    else {
-        int counter = 0;
-        for (uchar* p = frame.data; p != frame.dataend; p++) {
-            if (*p == 205 || *p == 0) {
-                counter++;
-            }
-        }
-        if (counter > frame.size().width * frame.size().height * frame.channels() / 90) {
-            cap.open(defaultID);
-            opened = cap.isOpened();
-            cap >> frame;
-        }
-    }
-
-    string videoPath = "C:\\Users\\sever\\OneDrive - bwedu\\6. Semester\\CV\\Labor\\Aufnahmen\\WIN_20221213_20_28_03_Pro.mp4";
-    string videoPath2 = "C:\\Users\\sever\\OneDrive - bwedu\\6. Semester\\CV\\Labor\\Aufnahmen\\WIN_20221213_20_27_35_Pro.mp4";
-    string videoPath3 = "C:\\Users\\sever\\OneDrive - bwedu\\6. Semester\\CV\\Labor\\Aufnahmen\\WIN_20221214_21_16_23_Pro.mp4";
-    string videoPath4 = "C:\\Users\\sever\\OneDrive - bwedu\\6. Semester\\CV\\Labor\\Aufnahmen\\WIN_20221214_21_16_49_Pro.mp4";
-
-    cap >> frame;
-    Mat grayFrame, binFrame;
-    cvtColor(frame, grayFrame, cv::COLOR_BGR2GRAY);
-    threshold(grayFrame, binFrame, 40, 40, THRESH_BINARY);
-    try {
-        if (countNonZero(binFrame) < 100 || frame.empty() || !opened) {
-            cap.open(defaultID);
-        }
-    }
-    catch (std::exception& e) {
-        cap.open(defaultID);
-    }
-    cap >> frame;
-    if (frame.empty() || !opened) {
-        std::cerr << "ERROR! Unable to open camera. Using video recording.\n";
-        cap.release();
-        cap.open(videoPath);
-    }
-    cap >> frame;
-    cvtColor(frame, grayFrame, cv::COLOR_BGR2GRAY);
-    threshold(grayFrame, binFrame, 40, 40, THRESH_BINARY);
-    try {
-        if (countNonZero(binFrame) < 100 || frame.empty() || !opened) {
-            std::cerr << "ERROR! Unable to open camera. Using video recording.\n";
-            cap.release();
-            cap.open(videoPath);
-        }
-        else {
-            std::cout << "Nonzero: " << countNonZero(binFrame) << std::endl;
-        }
-    }
-    catch (std::exception& e) {
-        std::cerr << "ERROR! Unable to open camera. Using video recording.\n";
-        cap.release();
-        cap.open(videoPath);
-    }
-    return cap;
-}
-
 
 bool detectPieces(VideoCapture& cap, Game& g, Mat& rotated_roi) {
     cout << "\nDetecting pieces..." << endl;
     Board b = g.board;
-    int squareLen = b.roi.width / 8; // Ist nicht schlimm wenn ein paar Pixel übrig bleiben
-    
-    int rowPx, colPx;
-    int nCols = 8;
-    int nRows = 8;
-    int nSquares = 64;
-    Mat frame;
-    cap >> frame;
-    Mat squareImg;
-    char fileN, rankN;
-    //vector<Scalar> meanColors;
-    for (int row = 0; row < nRows; row++) {
-        for (int col = 0; col < nCols; col++) {
-            fileN = fileMap[col];
-            rankN = (char)(row + 1 + '0');
-            rowPx = (nRows - 1 - row) * squareLen;
-            colPx = col * squareLen;
-            Rect roi = Rect(Point(colPx, rowPx), Point(colPx + squareLen, rowPx + squareLen));
-            g.squares.push_back(Square(Point(colPx, rowPx), roi, fileN, rankN));
-            squareImg = frame(roi);
-            cout << fileN << rankN << " --> " << rowPx << ", " << colPx;
-            Scalar meanCol = mean(squareImg);
-            cout << "\t" <<  meanCol << ", Sum=" << meanCol[0] + meanCol[1] + meanCol[2] << endl;
-            //if (row == 1 && col == 0) circle(rotated_roi, Point(colPx, rowPx), 1, cv::Scalar(0, 255, 0), 2, 8, 0);
 
-            // TODO: Brettausrichtung herausfinden + Rotieren --> Dann feststellen, welche Felder besetzt sind.
-        }
+    for (Square s : g.squares) {
+        cout << s.name << " ";
     }
 
-    imshow("Rotated roi", rotated_roi);
+    //imshow("Rotated roi", rotated_roi);
 
     return true;
 }
 
-void onClickLive(int event, int x, int y, int z, void*) {
-    if (event == cv::EVENT_LBUTTONDOWN) {
-        std::cout << "x=" << x << ", y=" << y << std::endl;
-    }
-}
-
-void onClickLines(int event, int x, int y, int z, void*) {
-    if (event == cv::EVENT_LBUTTONDOWN) {
-        std::cout << "x=" << x << ", y=" << y << std::endl;
-    }
-}
 
 int main()
 {
@@ -936,16 +534,18 @@ int main()
     Mat referenceImg; // Achtung: Könnte Figuren enthalten!
 
     Board b = Board();
+    Game g = Game();
 
     bool ending = false;
     bool piecesAccepted = false;
     while(!ending) {
         while (!b.located) {
-            b = getBoard(cap, referenceImg);
+            b = getBoard(cap, referenceImg, g);
             cv::waitKey(200);
         
             if (b.located) {
-                cout << "\nAccept board? [Enter] - Any other key to discard and try again..." << endl;
+                cout << "\nBoard detection finished. If the board was correctly located, please place pieces on the board and press [Enter]." << endl;
+                cout << "Accept board? [Enter] - Any other key to discard and try again..." << endl;
                 char key = (char)waitKey(0); // Muss auf einem der Namedwindows sein, nicht auf der Konsole!
                 //cout << "Key: " << (int)key << endl;
                 if ((char)27 == key) { // Exit on Esc-Button
@@ -962,7 +562,6 @@ int main()
                 }
             }
         }
-        Game g(b);
 
         while (!piecesAccepted) {
             piecesAccepted = detectPieces(cap, g, referenceImg);
