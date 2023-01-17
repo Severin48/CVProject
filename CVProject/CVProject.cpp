@@ -12,28 +12,74 @@ const int defaultWidth = 640;
 const int defaultHeight = 480;
 const float defaultRatio = (float)defaultWidth / defaultHeight;
 
+map<char, char> fileMap = { {0, 'a'}, {1, 'b'}, {2, 'c'}, {3, 'd'}, {4, 'e'}, {5, 'f'}, {6, 'g'}, {7, 'h'} };
+
 
 const std::string w_name = "Live";
 
 const float max_angle_deviation = 0.01;
 
 class Board {
-    public:
-        std::vector<cv::Point> corners;
-        cv::Rect boardRect;
-        float sideLength = 0;
-        bool located = false;
-        cv::Rect roi;
-        
-        Board() {
-        }
+public:
+    std::vector<cv::Point> corners;
+    cv::Rect boardRect;
+    float sideLength = 0;
+    bool located = false;
+    cv::Rect roi;
 
-        Board(std::vector<cv::Point> corners, float sideLength, cv::Rect roi) {
-            //this->boardRect = cv::Rect(corners[0], corners[1], corners[2], corners[3]);
-            this->located = true;
-            this->roi = roi;
-        }
+    Board() {
+    }
+
+    Board(std::vector<cv::Point> corners, float sideLength, cv::Rect roi) {
+        this->located = true;
+        this->roi = roi;
+    }
 };
+
+class Square {
+public:
+    Point topLeft;
+    bool occupied = false;
+    string piece;
+    string name;
+    Rect rect;
+    char file;
+    char rank;
+
+    Square(Point tl, Rect rec, char file, char rank) { // File: Letters, Rank: Numbers
+        this->topLeft = tl;
+        this->rect = rec;
+        this->file = file;
+        this->rank = rank;
+        this->name = string() + file + rank;
+    }
+};
+
+class Piece {
+public:
+    string name;
+    Square square;
+    bool active;
+};
+
+class Game {
+public:
+    Board board;
+    vector<Square> squares;
+    vector<Piece> pieces;
+
+    Game() {
+
+    }
+
+    Game(Board b) {
+        this->board = b;
+    }
+};
+
+
+
+
 
 template <typename T>
 bool in_vec_within_tolerance(T testValue, std::vector<T>& vec, float allowedDeviation, int& idx) {
@@ -637,8 +683,6 @@ Board getBoard(cv::VideoCapture& cap, Mat& refImg) {
         cout << "Rotated corners:\n" << rotatedCorners << endl;
         cv::Point center = cv::Point(frame.cols / 2, frame.rows / 2);
 
-        //double angle2 = avgAngles[p.second];
-
         int tolerancePxs = 20;
         Point topLeft = Point(INT_MAX - tolerancePxs, INT_MAX - tolerancePxs);
         Point botRight = Point(0, 0);
@@ -671,19 +715,6 @@ Board getBoard(cv::VideoCapture& cap, Mat& refImg) {
         //imshow("Rotated", rotated);
         imshow(w_name, dst);
         return Board(corners, meanSideLen, roi);
-
-        // TODO: Gruppierung in Funktion mostPrevalentGroups ausbauen --> Kann dann auch für Gruppen von Feldgrößen genutzt werden --> Kann bei der Erkennung der Brettbegrenzung helfen
-        // Insbesondere bei der Größe der Begrenzungslinien! (Ca. 8*Feldgröße = Brettgröße), aber vorsicht, boardCenter liegt nicht genau in der Mitte.
-
-        // TODO: Smallest --> Second smallest under condition that it is on the other side --> Compare distances if take smallest of G1 and G2, move farther line
-        // such that it is 
-
-        // Analog für G2
-
-        // TODO: Beide Gruppen durchgehen, bei beiden gleiches Vorgehen, um beide Innenlinien zu ermitteln:
-        // Linien nach aufsteigendem Abstand zum Mittelpunkt sortieren. Erste Linie ist die mit kleinstem Abstand. Zweite Linie ist die mit nächstkleinem Abstand, wobei allerdings
-        // auch gelten muss, dass die erste Linie nicht zwischen dieser Linie und dieser Kandidatenlinie liegt. Mathematisch ausgedrückt muss der Abstand von Kandidatenlinie
-        // zu Mittelpunkt kleiner sein als von Kandidatenlinie zu erster Linie.
     }
 
     // TODO: Use groups-pair with smallest distance between their points.
@@ -807,6 +838,39 @@ cv::VideoCapture select_camera() {
     return cap;
 }
 
+
+bool detectPieces(VideoCapture& cap, Game& g) {
+    cout << "\nDetecting pieces..." << endl;
+    Board b = g.board;
+    int squareLen = b.roi.width / 8; // Ist nicht schlimm wenn ein paar Pixel übrig bleiben
+    
+    int rowPx, colPx;
+    int nCols = 8;
+    int nRows = 8;
+    int nSquares = 64;
+    Mat frame;
+    cap >> frame;
+    Mat squareImg;
+    char fileN, rankN;
+    for (int row = 0; row < nRows; row++) {
+        for (int col = 0; col < nCols; col++) {
+            fileN = fileMap[col];
+            rankN = (char)(row + 1 + '0');
+            rowPx = row * squareLen;
+            colPx = col * squareLen;
+            Rect roi = Rect(Point(colPx, rowPx), Point(colPx + squareLen, rowPx + squareLen));
+            g.squares.push_back(Square(Point(colPx, rowPx), roi, fileN, rankN));
+            squareImg = frame(roi);
+            //cout << fileN << rankN << " --> Row " << ", Col " << col;
+            //cout << mean(squareImg) << endl;
+
+            // TODO: Brettausrichtung herausfinden + Rotieren --> Dann feststellen, welche Felder besetzt sind.
+        }
+    }
+
+    return true;
+}
+
 void onClickLive(int event, int x, int y, int z, void*) {
     if (event == cv::EVENT_LBUTTONDOWN) {
         std::cout << "x=" << x << ", y=" << y << std::endl;
@@ -868,28 +932,56 @@ int main()
     
     std::this_thread::sleep_for(std::chrono::milliseconds(1000)); // Waiting for the webcam to focus
 
-    Mat referenceImg;
+    Mat referenceImg; // Achtung: Könnte Figuren enthalten!
 
     Board b = Board();
 
+    bool piecesAccepted = false;
     bool acceptedBoard = false;
     while(!acceptedBoard) {
         while (!b.located) {
             b = getBoard(cap, referenceImg);
-            cv::waitKey(400);
+            cv::waitKey(200);
         }
         cout << "\nAccept board? [Enter] - Any other key to discard and try again..." << endl;
         char key = (char) waitKey(0); // Muss auf einem der Namedwindows sein, nicht auf der Konsole!
-        cout << "Key: " << (int)key << endl;
-        if (((char)13 == key)) {
+        //cout << "Key: " << (int)key << endl;
+        if ((char)27 == key) { // Exit on Esc-Button
+            cout << "\nExiting..." << endl;
+            return 0;
+        }
+        if ((char)13 == key) {
             cout << "Detected board accepted." << endl;
             acceptedBoard = true;
         }
         else {
-            cout << "Board detection discarded. Trying again..." << endl; 
+            cout << "Board detection discarded. Trying again..." << endl;
+            b.located = false;
+        }
+
+        Game g(b);
+
+        while (!piecesAccepted) {
+            piecesAccepted = detectPieces(cap, g);
+            cv::waitKey(200);
+        }
+        key = waitKey(0);
+        if ((char)27 == key) { // Exit on Esc-Button
+            cout << "\nExiting..." << endl;
+            return 0;
+        }
+        if ((char)13 == key) {
+            cout << "Detected board accepted." << endl;
+            acceptedBoard = true;
+        }
+        else {
+            cout << "Board detection discarded. Trying again..." << endl;
             b.located = false;
         }
     }
+
+    // TODO: Detect pieces
+    // While loop with possibility to do all over
 
     while (cv::waitKey(200)) {
         std::cout << ""; // TODO: Remove --> Put to end to keep clicking coordinates
