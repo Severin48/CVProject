@@ -83,7 +83,7 @@ cv::Mat getFrame(cv::VideoCapture& cap) {
 }
 
 cv::Mat rotate_image(cv::Mat& src, double angle, vector<Point>& corners) {
-    std::cout << "Rotating image..." << std::endl;
+    std::cout << "\nRotating image..." << std::endl;
     angle = angle * (180 / CV_PI);
     std::cout << "Rotation angle (deg): " << angle << std::endl;
     cv::Point center = cv::Point(src.cols / 2, src.rows / 2);
@@ -298,7 +298,7 @@ double getSquareLength(cv::VideoCapture& cap, double angle1, double angle2, floa
     return boardLen;
 }
 
-Board getBoard(cv::VideoCapture& cap) {
+Board getBoard(cv::VideoCapture& cap, Mat& refImg) {
     std::cout << std::endl << "Starting board detection..." << std::endl;
     cv::Mat frame, dst;
     cv::Mat linesImg;
@@ -654,7 +654,9 @@ Board getBoard(cv::VideoCapture& cap) {
 
         cv::Rect roi = cv::Rect(topLeft, botRight);
         if (roi.width < 20 || roi.height < 20) { cerr << "ROI too small" << endl; return Board(); }
-        imshow("Rotated roi", rotated(roi));
+
+        refImg = rotated(roi);
+        imshow("Rotated roi", refImg);
 
         line(dst, corners[0], corners[1], cv::Scalar(255, 0, 0), 1, cv::LINE_AA);
         line(dst, corners[0], corners[2], cv::Scalar(0, 255, 0), 1, cv::LINE_AA);
@@ -866,34 +868,31 @@ int main()
     
     std::this_thread::sleep_for(std::chrono::milliseconds(1000)); // Waiting for the webcam to focus
 
-    //Board b = getBoard(cap); // Replace later with loop below
-    // TODO: Keep trying to locate the board
+    Mat referenceImg;
+
     Board b = Board();
 
     bool acceptedBoard = false;
     while(!acceptedBoard) {
         while (!b.located) {
-            b = getBoard(cap);
-            cv::waitKey(100);
+            b = getBoard(cap, referenceImg);
+            cv::waitKey(400);
         }
-        cout << "Accept board? [Enter]" << endl; // TODO: Fix
-        char key = (char)waitKey(0);
-        cout << "Key: " << key << endl;
-        if (((char)10 == key)) {
+        cout << "\nAccept board? [Enter] - Any other key to discard and try again..." << endl;
+        char key = (char) waitKey(0); // Muss auf einem der Namedwindows sein, nicht auf der Konsole!
+        cout << "Key: " << (int)key << endl;
+        if (((char)13 == key)) {
+            cout << "Detected board accepted." << endl;
             acceptedBoard = true;
         }
+        else {
+            cout << "Board detection discarded. Trying again..." << endl; 
+            b.located = false;
+        }
     }
-    cout << "Board accepted." << endl;
-    //while (true) {
-    //    b = getBoard(cap);
-    //    cv::waitKey(100);
-    //}
-
-    // TODO: Am Anfang, wenn Brett erkannt wird ein Bild speichern, das zum Vergleich benutzt wird während des Spiels - Pixelunterschiede berechnen, um zu erkennen ob eine
-    // Figur auf Feld steht. (Aber zuerst rotieren, sodass es gerade ist, damit man die Rechtecke leichter einteilen kann! Feldbreite sollte schon von Bretterkennung bekannt sein.
 
     while (cv::waitKey(200)) {
-        std::cout << "";
+        std::cout << ""; // TODO: Remove --> Put to end to keep clicking coordinates
     }
 
     //while (cap.isOpened()) {
