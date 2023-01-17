@@ -6,6 +6,11 @@
 //#include <algorithm>
 #include "CVProject.h"
 
+using namespace std;
+
+double meanWhite = -1;
+double meanBlack = -1;
+
 
 void getSquareData(VideoCapture& cap, Mat& refImg, Game& g, double squareLen, bool& properlyRotated) {
     int rowPx, colPx;
@@ -13,19 +18,19 @@ void getSquareData(VideoCapture& cap, Mat& refImg, Game& g, double squareLen, bo
     int nRows = 8;
     int nSquares = 64;
     Mat frame;
-    cap >> frame; // Now containing pieces
+    cap >> frame;
     Mat squareImg;
     char fileN, rankN;
     Scalar green = Scalar(255, 0, 0);
     Mat rotNoBorder = refImg.clone() - green;
-    imshow("No green", rotNoBorder);
+    //imshow("No green", rotNoBorder);
     int colorSum;
     int minMean = INT_MAX;
     int maxMean = -1;
     int whiteSquareThresh = 150;
     bool isWhite = false;
     if (g.squares.size() > 1) { g.squares.clear();}
-    //vector<Scalar> meanColors;
+    int counter = 0;
     for (int row = 0; row < nRows; row++) {
         for (int col = 0; col < nCols; col++) {
             fileN = fileMap[col];
@@ -44,13 +49,29 @@ void getSquareData(VideoCapture& cap, Mat& refImg, Game& g, double squareLen, bo
                 isWhite = true;
             }
             else { isWhite = false; }
-            if (row == 0 && col == 0 && !isWhite) {
+            if (row == 3 && col == 3 && !isWhite) {
                 properlyRotated = true;
                 // cout << "Was properly rotated" << endl;
             }
             else properlyRotated = false;
-            g.squares.push_back(Square(Point(colPx, rowPx), roi, fileN, rankN, meanCol, squareImg, isWhite));
+            if (row == 3 && col == 4) {
+                if (isWhite) {
+                    meanWhite = colorSum;
+                    meanBlack = g.squares[g.squares.size() - 1].meanSum;
+                }
+                else {
+                    meanBlack = colorSum;
+                    meanWhite = g.squares[g.squares.size() - 1].meanSum;
+                }
+                cout << "MeanBlack=" << meanBlack << ", meanWhite=" << meanWhite << endl;
+            }
+            g.squares.push_back(Square(Point(colPx, rowPx), roi, fileN, rankN, meanCol, squareImg, isWhite, colorSum));
             //if (row == 1 && col == 0) circle(rotated_roi, Point(colPx, rowPx), 1, cv::Scalar(0, 255, 0), 2, 8, 0);
+            if (!((row == 3 && col == 3) || (row == 3 && col == 4))) {
+                if (counter % 2 == 0) { isWhite = false; }
+                else { isWhite = true; }
+            }
+            counter++;
         }
     }
     if (g.squares[0].isWhite) {
@@ -60,7 +81,7 @@ void getSquareData(VideoCapture& cap, Mat& refImg, Game& g, double squareLen, bo
 }
 
 
-Board getBoard(cv::VideoCapture& cap, Mat& refImg, Game& game) {
+Board getBoard(cv::VideoCapture& cap, Mat& refImg, Game& game, double& rotAngle, bool& correctionRotationNeeded) {
     std::cout << std::endl << "Starting board detection..." << std::endl;
     cv::Mat frame, dst;
     cv::Mat linesImg;
@@ -386,9 +407,9 @@ Board getBoard(cv::VideoCapture& cap, Mat& refImg, Game& game) {
         float boardSideLen3 = euclideanDist(corners[3], corners[1]);
         float boardSideLen4 = euclideanDist(corners[3], corners[2]);
 
-        double angle1 = avgAngles[p.first];
+        rotAngle = avgAngles[p.first];
         std::vector<cv::Point> rotatedCorners(corners); // Create copy of corners
-        cv::Mat rotated = rotate_image(frame, angle1, rotatedCorners);
+        cv::Mat rotated = rotate_image(frame, rotAngle, rotatedCorners);
         cout << "Rotated corners:\n" << rotatedCorners << endl;
         cv::Point center = cv::Point(frame.cols / 2, frame.rows / 2);
 
@@ -423,9 +444,11 @@ Board getBoard(cv::VideoCapture& cap, Mat& refImg, Game& game) {
         bool properlyRotated = false;
         getSquareData(cap, refImg, game, squareLen, properlyRotated);
         if (!properlyRotated) {
+            correctionRotationNeeded = true;
             refImg = rotate_image(refImg, CV_PI/2., rotatedCorners);
             getSquareData(cap, refImg, game, squareLen, properlyRotated);
         }
+        else { correctionRotationNeeded = false; }
 
         //line(rotated, rotatedCorners[0], rotatedCorners[1], cv::Scalar(255, 0, 0), 1, cv::LINE_AA);
         //line(rotated, rotatedCorners[0], rotatedCorners[2], cv::Scalar(0, 255, 0), 1, cv::LINE_AA);
@@ -468,17 +491,64 @@ Board getBoard(cv::VideoCapture& cap, Mat& refImg, Game& game) {
 }
 
 
-bool detectPieces(VideoCapture& cap, Game& g, Mat& rotated_roi) {
+bool detectPieces(VideoCapture& cap, Game& g, double rotAngle, bool correctionRotationNeeded, bool& needsFlip, Mat& roiImg) {
     cout << "\nDetecting pieces..." << endl;
     Board b = g.board;
 
-    for (Square s : g.squares) {
-        cout << s.name << " ";
+    int squareLen = b.roi.width/8.;
+    int rowPx, colPx;
+    int nCols = 8;
+    int nRows = 8;
+    int nSquares = 64;
+    Mat frame;
+    cap >> frame; // Now containing pieces
+    Mat rotated_roi = rotate_image(frame, rotAngle);
+    rotated_roi = rotated_roi(b.roi);
+    if (correctionRotationNeeded) {
+        rotated_roi = rotate_image(rotated_roi, CV_PI/2.);
     }
+    int colorSum;
 
-    //imshow("Rotated roi", rotated_roi);
+    Mat squareImg;
+    Scalar green = Scalar(255, 0, 0);
+    Mat rotNoBorder = rotated_roi.clone() - green;
+    // imshow("Detecting Pieces ROI", rotNoBorder);
+
+    int oppositeColorPieceThresh = 75; // Vorsicht wenn weißer Rand dabei ist --> Evtl. lieber weißes Feld mit schwarzer Figur überprüfen
+    for (Square s : g.squares) {
+        squareImg = rotNoBorder(s.rect);
+        Scalar meanCol = mean(squareImg);
+        colorSum = meanCol[0] + meanCol[1] + meanCol[2];
+        double diffBlack = abs(colorSum - meanBlack);
+        double diffWhite = abs(colorSum - meanWhite);
+        if (s.name == "a1") {
+            cout << "Diffblack: " << diffBlack << endl;
+            if (diffBlack >= oppositeColorPieceThresh) {
+                cout << "Bottom left square is occupied by a white piece." << endl;
+                needsFlip = false;
+            }
+            else needsFlip = true;
+        }
+    }
+    roiImg = rotNoBorder;
 
     return true;
+}
+
+void assignPieces(Game g, Mat& roiImg, bool needsFlip) {
+    cout << "\n\nAssigning pieces to squares..." << endl;
+    if (needsFlip) {
+        roiImg = rotate_image(roiImg, CV_PI);
+    }
+    imshow("RoiImg", roiImg);
+
+    // TODO: Occupied zuweisen für a1-h2 und a7-h8 + occupiedByWhite regeln dadurch + occupied bei squares
+    // + Pieces markieren mit blauem Rechteck um Squares, welche eine Figur enthalten
+    // + in einer anderen Funktion dann Figuren tracken --> Schleife, in der immer analysiert wird, wo Figuren stehen --> Wenn in einem Frame mehrere fehlen verwerfe Frame
+    // --> Ist wahrscheinlich von Hand verdeckt - es darf nur eine Figur verstellt sein - Bilder von allen anderen machen und schauen ob sie noch ungefähr gleich sind!
+    // Einfache Alternative: Jeden Zug mit Enter bestätigen - aus Zeitgründen lieber das machen
+    // Art der Figur merken! Und printen z.B. Knight moved from B1 to C3
+    // Optional: PGN mit Python verbinden
 }
 
 
@@ -535,12 +605,14 @@ int main()
 
     Board b = Board();
     Game g = Game();
+    double rotationAngle = 0;
+    bool correctionNeeded = false;
 
     bool ending = false;
     bool piecesAccepted = false;
     while(!ending) {
         while (!b.located) {
-            b = getBoard(cap, referenceImg, g);
+            b = getBoard(cap, referenceImg, g, rotationAngle, correctionNeeded);
             cv::waitKey(200);
         
             if (b.located) {
@@ -562,9 +634,11 @@ int main()
                 }
             }
         }
-
+        bool needsFlip = false;
+        Mat roiImg;
         while (!piecesAccepted) {
-            piecesAccepted = detectPieces(cap, g, referenceImg);
+            piecesAccepted = detectPieces(cap, g, rotationAngle, correctionNeeded, needsFlip, roiImg);
+            assignPieces(g, roiImg, needsFlip);
             cv::waitKey(200);
             
             if (piecesAccepted) {
@@ -585,37 +659,12 @@ int main()
             }
         }
     }
-
-    // TODO: Detect pieces
-    // While loop with possibility to do all over
-
-    while (cv::waitKey(200)) {
-        std::cout << ""; // TODO: Remove --> Put to end to keep clicking coordinates
-    }
-
-    //while (cap.isOpened()) {
-    //    for (int i = 0; i < amount_frames; i++) {
-    //        cap >> frame;
-    //        frames.push_back(frame);
-    //        if (frame.empty()) {
-    //            cerr << "ERROR! Blank frame grabbed\n";
-    //            break;
-    //        }
-    //        //imshow("Live", frame);
-
-    //        cv::waitKey(frame_time);
-    //        //frame.release();
-    //    }
-
-    //    process_images(frames);
-
-    //    frames.clear();
-
-    //    // TODO: Frames timeout
-
-    //}
-
+    
     cap.release();
+
+    //while (cv::waitKey(200)) {
+    //    std::cout << "";
+    //}
 
     std::cout << "Waiting for keypress..." << std::endl;
     cv::waitKey(0);

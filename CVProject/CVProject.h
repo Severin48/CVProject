@@ -39,12 +39,28 @@ public:
     }
 };
 
+class Piece {
+public:
+    string name;
+    string squareName;
+    Point squareTopLeft;
+    bool active;
+    bool isWhite;
+
+    Piece() {}
+
+    Piece(string squareName, Point squareTopLeft, bool isWhite) {
+        this->squareName = squareName;
+        this->squareTopLeft = squareTopLeft;
+        this->isWhite = isWhite;
+    }
+};
 
 class Square {
 public:
     Point topLeft;
     bool occupied = false;
-    string piece;
+    Piece piece;
     string name;
     Rect rect;
     char file;
@@ -52,8 +68,12 @@ public:
     bool isWhite;
     Scalar meanCol;
     Mat img;
+    int meanSum;
+    bool occupiedByWhite;
 
-    Square(Point tl, Rect rec, char file, char rank, Scalar meanCol, Mat img, bool isWhite) { // File: Letters, Rank: Numbers
+    Square() {}
+
+    Square(Point tl, Rect rec, char file, char rank, Scalar meanCol, Mat img, bool isWhite, int meanSum) { // File: Letters, Rank: Numbers
         this->topLeft = tl;
         this->rect = rec;
         this->file = file;
@@ -62,17 +82,9 @@ public:
         this->meanCol = meanCol;
         this->img = img;
         this->isWhite = isWhite;
+        this->meanSum = meanSum;
     }
 };
-
-
-class Piece {
-public:
-    string name;
-    Square square;
-    bool active;
-};
-
 
 class Game {
 public:
@@ -205,6 +217,18 @@ cv::Mat getFrame(cv::VideoCapture& cap) {
     return ret;
 }
 
+cv::Mat rotate_image(cv::Mat& src, double angle) {
+    std::cout << "\nRotating image..." << std::endl;
+    angle = angle * (180 / CV_PI);
+    std::cout << "Rotation angle (deg): " << angle << std::endl;
+    cv::Point center = cv::Point(src.cols / 2, src.rows / 2);
+    cv::Mat rot_mat = getRotationMatrix2D(center, angle, 1.);
+    cv::Mat rotate_dst;
+    warpAffine(src, rotate_dst, rot_mat, src.size());
+
+    return rotate_dst;
+}
+
 cv::Mat rotate_image(cv::Mat& src, double angle, vector<Point>& corners) {
     std::cout << "\nRotating image..." << std::endl;
     angle = angle * (180 / CV_PI);
@@ -229,13 +253,6 @@ cv::Mat rotate_image(cv::Mat& src, double angle, vector<Point>& corners) {
 
     }
     return rotate_dst;
-}
-
-
-
-std::pair<cv::Point, cv::Point> adjustLineLen(cv::Point p1, cv::Point p2, double newLen) {
-    // TODO
-    return std::pair(p1, p2);
 }
 
 double getAngle(cv::Point p1, cv::Point p2) {
