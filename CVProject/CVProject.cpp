@@ -30,9 +30,10 @@ public:
     Board() {
     }
 
-    Board(std::vector<cv::Point> corners, float sideLength, cv::Rect roi) {
+    Board(std::vector<cv::Point> corners, cv::Rect roi) {
         this->located = true;
         this->roi = roi;
+        this->sideLength = roi.width;
     }
 };
 
@@ -45,6 +46,7 @@ public:
     Rect rect;
     char file;
     char rank;
+    bool isWhite;
 
     Square(Point tl, Rect rec, char file, char rank) { // File: Letters, Rank: Numbers
         this->topLeft = tl;
@@ -532,13 +534,7 @@ Board getBoard(cv::VideoCapture& cap, Mat& refImg) {
         std::cout << "Board center x = " << mean_x << ", Board center y = " << mean_y << std::endl;
         cv::circle(linesImg, boardCenter, 1, cv::Scalar(0, 255, 0), 2, 8, 0);
 
-        imshow("Lines", linesImg); // TODO: Remove
-
-        // TODO: Get max distance of each group, filter out all lines from groups which are less than 75% of the max_distance
-        // Mittelpunkt kann nicht genutzt werden, da er unbalanciert sein kann
-        // Für Gruppe 1: Am weitest entfernte zwei Linien finden (diese sind keine Kandidaten) dann alle anderen Linien durchschauen, deren
-        // Distanz zu beiden weitesten Linien errechnen und falls die größere dieser beiden Distanzen < 75 % maxDist, dann verwerfe Linie!
-        // Dann für Gruppe 2 genau das gleiche
+        // imshow("Lines", linesImg);
 
         float distance_percentage = 0.85;
 
@@ -675,7 +671,6 @@ Board getBoard(cv::VideoCapture& cap, Mat& refImg) {
         float boardSideLen2 = euclideanDist(corners[0], corners[2]);
         float boardSideLen3 = euclideanDist(corners[3], corners[1]);
         float boardSideLen4 = euclideanDist(corners[3], corners[2]);
-        float meanSideLen = (boardSideLen1 + boardSideLen2 + boardSideLen3 + boardSideLen4) / 4.;
 
         double angle1 = avgAngles[p.first];
         std::vector<cv::Point> rotatedCorners(corners); // Create copy of corners
@@ -700,21 +695,21 @@ Board getBoard(cv::VideoCapture& cap, Mat& refImg) {
         if (roi.width < 20 || roi.height < 20) { cerr << "ROI too small" << endl; return Board(); }
 
         refImg = rotated(roi);
-        imshow("Rotated roi", refImg);
-
-        line(dst, corners[0], corners[1], cv::Scalar(255, 0, 0), 1, cv::LINE_AA);
+        imshow("Rotated roi here", refImg);
+        Scalar green = cv::Scalar(255, 0, 0);
+        line(dst, corners[0], corners[1], green, 1, cv::LINE_AA);
         line(dst, corners[0], corners[2], cv::Scalar(0, 255, 0), 1, cv::LINE_AA);
         line(dst, corners[3], corners[1], cv::Scalar(0, 0, 255), 1, cv::LINE_AA);
         line(dst, corners[3], corners[2], cv::Scalar(255, 255, 0), 1, cv::LINE_AA);
 
-        line(rotated, rotatedCorners[0], rotatedCorners[1], cv::Scalar(255, 0, 0), 1, cv::LINE_AA);
-        line(rotated, rotatedCorners[0], rotatedCorners[2], cv::Scalar(0, 255, 0), 1, cv::LINE_AA);
-        line(rotated, rotatedCorners[3], rotatedCorners[1], cv::Scalar(0, 0, 255), 1, cv::LINE_AA);
-        line(rotated, rotatedCorners[3], rotatedCorners[2], cv::Scalar(255, 255, 0), 1, cv::LINE_AA);
+        //line(rotated, rotatedCorners[0], rotatedCorners[1], cv::Scalar(255, 0, 0), 1, cv::LINE_AA);
+        //line(rotated, rotatedCorners[0], rotatedCorners[2], cv::Scalar(0, 255, 0), 1, cv::LINE_AA);
+        //line(rotated, rotatedCorners[3], rotatedCorners[1], cv::Scalar(0, 0, 255), 1, cv::LINE_AA);
+        //line(rotated, rotatedCorners[3], rotatedCorners[2], cv::Scalar(255, 255, 0), 1, cv::LINE_AA);
 
         //imshow("Rotated", rotated);
         imshow(w_name, dst);
-        return Board(corners, meanSideLen, roi);
+        return Board(corners, roi);
     }
 
     // TODO: Use groups-pair with smallest distance between their points.
@@ -733,7 +728,7 @@ Board getBoard(cv::VideoCapture& cap, Mat& refImg) {
     // Point2f boardCenter((image.cols - 1) / 2.0, (image.rows - 1) / 2.0);
     // getRotationMatrix2D(boardCenter, angle, scale) - Center kann aus den Brettbegrenzungen errechnet werden oder wie oben
     // warpAffine(image, rotated_image, rotation_matix, image.size());
-    imshow("Lines", linesImg);
+    //imshow("Lines", linesImg);
     imshow(w_name, dst);
 
     std::cout << std::endl;
@@ -794,10 +789,12 @@ cv::VideoCapture select_camera() {
             cap >> frame;
         }
     }
-    //cap.open("C:\\Users\\sever\\OneDrive - bwedu\\6. Semester\\CV\\Labor\\Aufnahmen\\WIN_20221213_20_27_35_Pro.mp4");
-    //cap.open("C:\\Users\\sever\\OneDrive - bwedu\\6. Semester\\CV\\Labor\\Aufnahmen\\WIN_20221213_20_28_03_Pro.mp4");
-    //cap.open("C:\\Users\\sever\\OneDrive - bwedu\\6. Semester\\CV\\Labor\\Aufnahmen\\WIN_20221214_21_16_23_Pro.mp4");
-    //cap.open("C:\\Users\\sever\\OneDrive - bwedu\\6. Semester\\CV\\Labor\\Aufnahmen\\WIN_20221214_21_16_49_Pro.mp4"); // TODO: Remove
+
+    string videoPath = "C:\\Users\\sever\\OneDrive - bwedu\\6. Semester\\CV\\Labor\\Aufnahmen\\WIN_20221213_20_28_03_Pro.mp4";
+    string videoPath2 = "C:\\Users\\sever\\OneDrive - bwedu\\6. Semester\\CV\\Labor\\Aufnahmen\\WIN_20221213_20_27_35_Pro.mp4";
+    string videoPath3 = "C:\\Users\\sever\\OneDrive - bwedu\\6. Semester\\CV\\Labor\\Aufnahmen\\WIN_20221214_21_16_23_Pro.mp4";
+    string videoPath4 = "C:\\Users\\sever\\OneDrive - bwedu\\6. Semester\\CV\\Labor\\Aufnahmen\\WIN_20221214_21_16_49_Pro.mp4";
+
     cap >> frame;
     Mat grayFrame, binFrame;
     cvtColor(frame, grayFrame, cv::COLOR_BGR2GRAY);
@@ -814,8 +811,7 @@ cv::VideoCapture select_camera() {
     if (frame.empty() || !opened) {
         std::cerr << "ERROR! Unable to open camera. Using video recording.\n";
         cap.release();
-        cap.open("C:\\Users\\sever\\OneDrive - bwedu\\6. Semester\\CV\\Labor\\Aufnahmen\\WIN_20221213_20_28_03_Pro.mp4");
-        //cap.open("C:\\Users\\sever\\OneDrive - bwedu\\6. Semester\\CV\\Labor\\Aufnahmen\\WIN_20221213_20_27_35_Pro.mp4");
+        cap.open(videoPath);
     }
     cap >> frame;
     cvtColor(frame, grayFrame, cv::COLOR_BGR2GRAY);
@@ -824,7 +820,7 @@ cv::VideoCapture select_camera() {
         if (countNonZero(binFrame) < 100 || frame.empty() || !opened) {
             std::cerr << "ERROR! Unable to open camera. Using video recording.\n";
             cap.release();
-            cap.open("C:\\Users\\sever\\OneDrive - bwedu\\6. Semester\\CV\\Labor\\Aufnahmen\\WIN_20221213_20_28_03_Pro.mp4");
+            cap.open(videoPath);
         }
         else {
             std::cout << "Nonzero: " << countNonZero(binFrame) << std::endl;
@@ -833,13 +829,13 @@ cv::VideoCapture select_camera() {
     catch (std::exception& e) {
         std::cerr << "ERROR! Unable to open camera. Using video recording.\n";
         cap.release();
-        cap.open("C:\\Users\\sever\\OneDrive - bwedu\\6. Semester\\CV\\Labor\\Aufnahmen\\WIN_20221213_20_28_03_Pro.mp4");
+        cap.open(videoPath);
     }
     return cap;
 }
 
 
-bool detectPieces(VideoCapture& cap, Game& g) {
+bool detectPieces(VideoCapture& cap, Game& g, Mat& rotated_roi) {
     cout << "\nDetecting pieces..." << endl;
     Board b = g.board;
     int squareLen = b.roi.width / 8; // Ist nicht schlimm wenn ein paar Pixel übrig bleiben
@@ -852,21 +848,26 @@ bool detectPieces(VideoCapture& cap, Game& g) {
     cap >> frame;
     Mat squareImg;
     char fileN, rankN;
+    //vector<Scalar> meanColors;
     for (int row = 0; row < nRows; row++) {
         for (int col = 0; col < nCols; col++) {
             fileN = fileMap[col];
             rankN = (char)(row + 1 + '0');
-            rowPx = row * squareLen;
+            rowPx = (nRows - 1 - row) * squareLen;
             colPx = col * squareLen;
             Rect roi = Rect(Point(colPx, rowPx), Point(colPx + squareLen, rowPx + squareLen));
             g.squares.push_back(Square(Point(colPx, rowPx), roi, fileN, rankN));
             squareImg = frame(roi);
-            //cout << fileN << rankN << " --> Row " << ", Col " << col;
-            //cout << mean(squareImg) << endl;
+            cout << fileN << rankN << " --> " << rowPx << ", " << colPx;
+            Scalar meanCol = mean(squareImg);
+            cout << "\t" <<  meanCol << ", Sum=" << meanCol[0] + meanCol[1] + meanCol[2] << endl;
+            //if (row == 1 && col == 0) circle(rotated_roi, Point(colPx, rowPx), 1, cv::Scalar(0, 255, 0), 2, 8, 0);
 
             // TODO: Brettausrichtung herausfinden + Rotieren --> Dann feststellen, welche Felder besetzt sind.
         }
     }
+
+    imshow("Rotated roi", rotated_roi);
 
     return true;
 }
@@ -906,9 +907,9 @@ int main()
 
     cv::setMouseCallback(w_name, onClickLive, 0);
 
-    cv::namedWindow("Lines");
+    //cv::namedWindow("Lines");
 
-    cv::setMouseCallback("Lines", onClickLines, 0);
+    //cv::setMouseCallback("Lines", onClickLines, 0);
 
     //cv::namedWindow("Rotated");
     //cv::setMouseCallback("Rotated", onClickLines, 0);
@@ -936,47 +937,53 @@ int main()
 
     Board b = Board();
 
+    bool ending = false;
     bool piecesAccepted = false;
-    bool acceptedBoard = false;
-    while(!acceptedBoard) {
+    while(!ending) {
         while (!b.located) {
             b = getBoard(cap, referenceImg);
             cv::waitKey(200);
+        
+            if (b.located) {
+                cout << "\nAccept board? [Enter] - Any other key to discard and try again..." << endl;
+                char key = (char)waitKey(0); // Muss auf einem der Namedwindows sein, nicht auf der Konsole!
+                //cout << "Key: " << (int)key << endl;
+                if ((char)27 == key) { // Exit on Esc-Button
+                    cout << "\nExiting..." << endl;
+                    return 0;
+                }
+                if ((char)13 == key) { // Enter key
+                    cout << "Detected board accepted." << endl;
+                    break;
+                }
+                else {
+                    cout << "Board detection discarded. Trying again..." << endl;
+                    b.located = false;
+                }
+            }
         }
-        cout << "\nAccept board? [Enter] - Any other key to discard and try again..." << endl;
-        char key = (char) waitKey(0); // Muss auf einem der Namedwindows sein, nicht auf der Konsole!
-        //cout << "Key: " << (int)key << endl;
-        if ((char)27 == key) { // Exit on Esc-Button
-            cout << "\nExiting..." << endl;
-            return 0;
-        }
-        if ((char)13 == key) {
-            cout << "Detected board accepted." << endl;
-            acceptedBoard = true;
-        }
-        else {
-            cout << "Board detection discarded. Trying again..." << endl;
-            b.located = false;
-        }
-
         Game g(b);
 
         while (!piecesAccepted) {
-            piecesAccepted = detectPieces(cap, g);
+            piecesAccepted = detectPieces(cap, g, referenceImg);
             cv::waitKey(200);
-        }
-        key = waitKey(0);
-        if ((char)27 == key) { // Exit on Esc-Button
-            cout << "\nExiting..." << endl;
-            return 0;
-        }
-        if ((char)13 == key) {
-            cout << "Detected board accepted." << endl;
-            acceptedBoard = true;
-        }
-        else {
-            cout << "Board detection discarded. Trying again..." << endl;
-            b.located = false;
+            
+            if (piecesAccepted) {
+                cout << "\nAccept piece analysis? [Enter] - Any other key to discard and try again..." << endl;
+                char key = waitKey(0);
+                if ((char)27 == key) { // Esc-Button
+                    cout << "\nExiting..." << endl;
+                    return 0;
+                }
+                if ((char)13 == key) { // Enter key
+                    cout << "Piece detection accepted." << endl;
+                    break;
+                }
+                else {
+                    cout << "Piece detection discarded. Trying again..." << endl;
+                    piecesAccepted = false;
+                }
+            }
         }
     }
 
