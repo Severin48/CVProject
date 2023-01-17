@@ -310,9 +310,13 @@ cv::VideoCapture select_camera() {
 
     cap.open(deviceID);
     bool opened = false;
+    
+    for (int i = 0; i < 10; i++) {
+        cap >> frame;
+    }
     opened = cap.isOpened();
-    cap >> frame;
     if (frame.empty() || !opened || frame.data >= frame.dataend || frame.datastart == nullptr || frame.data == NULL) {
+        cout << "This case" << endl;
         cap.open(defaultID);
         opened = cap.isOpened();
         cap >> frame;

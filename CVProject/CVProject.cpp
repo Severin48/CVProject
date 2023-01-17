@@ -27,7 +27,7 @@ void getSquareData(VideoCapture& cap, Mat& refImg, Game& g, double squareLen, bo
     int colorSum;
     int minMean = INT_MAX;
     int maxMean = -1;
-    int whiteSquareThresh = 150;
+    int whiteSquareThresh = 200;
     bool isWhite = false;
     if (g.squares.size() > 1) { g.squares.clear();}
     int counter = 0;
@@ -512,9 +512,9 @@ bool detectPieces(VideoCapture& cap, Game& g, double rotAngle, bool correctionRo
     Mat squareImg;
     Scalar green = Scalar(255, 0, 0);
     Mat rotNoBorder = rotated_roi.clone() - green;
-    // imshow("Detecting Pieces ROI", rotNoBorder);
+    imshow("Detecting Pieces ROI", rotNoBorder);
 
-    int oppositeColorPieceThresh = 75; // Vorsicht wenn weißer Rand dabei ist --> Evtl. lieber weißes Feld mit schwarzer Figur überprüfen
+    int oppositeColorPieceThresh = 60; // Vorsicht wenn weißer Rand dabei ist --> Evtl. lieber weißes Feld mit schwarzer Figur überprüfen
     for (Square s : g.squares) {
         squareImg = rotNoBorder(s.rect);
         Scalar meanCol = mean(squareImg);
