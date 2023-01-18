@@ -100,6 +100,7 @@ public:
     Board board;
     vector<Square> squares;
     vector<Piece> pieces;
+    Rect roi;
 
     Game() {
 
@@ -227,9 +228,9 @@ cv::Mat getFrame(cv::VideoCapture& cap) {
 }
 
 cv::Mat rotate_image(cv::Mat& src, double angle) {
-    std::cout << "\nRotating image..." << std::endl;
+    //std::cout << "\nRotating image..." << std::endl;
     angle = angle * (180 / CV_PI);
-    std::cout << "Rotation angle (deg): " << angle << std::endl;
+    //std::cout << "Rotation angle (deg): " << angle << std::endl;
     cv::Point center = cv::Point(src.cols / 2, src.rows / 2);
     cv::Mat rot_mat = getRotationMatrix2D(center, angle, 1.);
     cv::Mat rotate_dst;
