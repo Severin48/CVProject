@@ -23,7 +23,7 @@ void getSquareData(VideoCapture& cap, Mat& refImg, Game& g, bool& properlyRotate
     Mat squareImg;
     char fileN, rankN;
     Scalar green = Scalar(255, 0, 0);
-    Mat rotNoBorder = refImg.clone() - green;
+    Mat rotNoBorder = refImg.clone()- green;
     int colorSum;
     int minMean = INT_MAX;
     int maxMean = -1;
@@ -527,7 +527,7 @@ bool detectPieces(VideoCapture& cap, Game& g, bool& needsFlip, Mat& roiImg) {
             else needsFlip = true;
         }
     }
-    roiImg = rotNoBorder;
+    //roiImg = rotNoBorder;
 
     return true;
 }
@@ -581,7 +581,7 @@ void assignPieces(Game& g, Mat& roiImgSrc, bool needsFlip, vector<double>& rotat
             //s.showRect(roiImg);
         }
     }
-    //imshow("RoiImg", roiImg);
+    imshow("RoiImg", roiImg);
 }
 
 void trackPieces(VideoCapture& cap, Game& g, Mat& refImg, bool prevPawnTwoAdvances, char file, vector<double> rotations) {
@@ -593,13 +593,6 @@ void trackPieces(VideoCapture& cap, Game& g, Mat& refImg, bool prevPawnTwoAdvanc
     // Optional: PGN mit Python verbinden
 
     Mat trackImg = refImg.clone();
-
-    // TODO: Update which squares are occupied by which piece and which color
-    // Update vacated square (2 squares for en-passant) use parameters
-    // TODO: Support castling
-
-    // TODO: Rotations needed --> Take frame and compare
-    // TODO: Return if view is obstructed --> More than 3 squares are covered/changed significantly
 
     Mat frame;
     while (frame.empty()) {
@@ -614,8 +607,64 @@ void trackPieces(VideoCapture& cap, Game& g, Mat& refImg, bool prevPawnTwoAdvanc
     }
     //Mat currentImg = frame(g.roi);
     //imshow("Current", frame);
+    Mat currentSquareImg, diffImg;
+    Scalar green = (255, 0, 0);
+    frame = frame - green;
+    int meanSum, diff;
+    int blackThresh = 10;
+    int whiteThresh = 80;
+    //cout << "\n\nDiffs: " << endl;
 
+    // TODO: Zuerst hier noch nichts ändern erst wenn bestätigt ist, dass es nicht von Hand bedeckt ist
+    int maxDiff = 0;
+    int changed = 0;
+    string maxName;
+    for (Square& s : g.squares) {
+        currentSquareImg = frame(s.rect);
+        absdiff(s.img, currentSquareImg, diffImg);
+        threshold(diffImg, diffImg, 80, 255, cv::THRESH_BINARY);
+        erode(diffImg, diffImg, cv::getStructuringElement(cv::MORPH_RECT, cv::Size(3, 3)));
+        Scalar meanCol = mean(diffImg);
+        meanSum = meanCol[0] + meanCol[1] + meanCol[2];
+        if (meanSum > maxDiff) {
+            maxDiff = meanSum;
+            maxName = s.name;
+        }
+        if (s.name == "a7") {
+            imshow(s.name, diffImg);
+            cout << "Difference of " << s.name << "=" << meanSum << endl;
+        }
+        if (s.name == "a8") {
+            imshow(s.name, diffImg);
+            cout << "Here";
+        }
+        if (!s.isWhite && !s.occupiedByWhite) {
+            if (meanSum > blackThresh) {
+                cout << "Black on black changed: " << s.name << endl;
+                changed++;
+            }
+        }
+        else {
+            if (meanSum > whiteThresh) {
+                cout << "Changed: " << s.name << endl;
+                changed++;
+            }
+        }
 
+    }
+    cout << "\nMax Diff: " << maxDiff << ", maxName=" << maxName << endl;
+    cout << "Changed: " << changed << endl;
+    if (changed > 3) {
+        cout << "View obstructed... trying again" << endl;
+        return;
+    }
+
+    // Hier bewegte Figuren bestimmen
+    // TODO: Refresh square images
+    // TODO: Am Ende das Referenzbild updaten
+    // TODO: Update which squares are occupied by which piece and which color
+    // Update vacated square (2 squares for en-passant) use parameters
+    // TODO: Support castling
 
     for (Square& s : g.squares) {
         //cout << s.name << " occupied: " << s.occupied << " ";
