@@ -613,13 +613,16 @@ void trackPieces(VideoCapture& cap, Game& g, Mat& refImg, bool prevPawnTwoAdvanc
     Mat currentSquareImg, diffImg;
     Mat currentCopy;
     int meanSum, diff;
-    double blackThresh = 0.07;
+    double blackThresh = 0.1;
     double whiteThresh = 0.3;
+    double a7Thresh = 0.2;
     double totalDiffFactor;
+    pair<string, string> mostChanged;
     //cout << "\n\nDiffs: " << endl;
 
     // TODO: Zuerst hier noch nichts ändern erst wenn bestätigt ist, dass es nicht von Hand bedeckt ist
     double maxDiff = 0;
+    double secondMax = 0;
     int changed = 0;
     double gDiff, bDiff, rDiff, totalDiff;
     string maxName;
@@ -632,42 +635,44 @@ void trackPieces(VideoCapture& cap, Game& g, Mat& refImg, bool prevPawnTwoAdvanc
         Scalar meanCol = mean(diffImg);
         meanSum = meanCol[0] + meanCol[1] + meanCol[2];
 
-        //for (int i = 0; i < s.img.rows; i++) {
-        //    for (int j = 0; j < s.img.cols; j++) {
-        //        std::cout << s.img.at<cv::Vec3b>(i, j)[0] << " " << s.img.at<cv::Vec3b>(i, j)[1] << " " << s.img.at<cv::Vec3b>(i, j)[2] << std::endl;
-        //    }
-        //}
-
-        // TODO: Im Verhältnis setzen zu vorherigem Mean!!!!
-        
-        //gDiff = abs(meanCol[0] - s.meanCol[0]);
-        //bDiff = abs(meanCol[1] - s.meanCol[1]);
-        //rDiff = abs(meanCol[2] - s.meanCol[2]);
-        //totalDiff = gDiff + bDiff + rDiff;
         totalDiffFactor = meanSum / (double)s.meanSum;
 
-        cout << s.name << " --> Total DiffFactor=" << totalDiffFactor << endl;
-        if (totalDiffFactor > maxDiff) {
-            maxDiff = totalDiffFactor;
-            maxName = s.name;
+        //cout << s.name << " --> Total DiffFactor=" << totalDiffFactor << endl;
+        if (totalDiffFactor > secondMax) {
+            if (totalDiffFactor > maxDiff) {
+                secondMax = maxDiff;
+                mostChanged.second = mostChanged.first;
+                maxDiff = totalDiffFactor;
+                maxName = s.name;
+                mostChanged.first = s.name;
+
+            }
+            else {
+                secondMax = maxDiff;
+                mostChanged.second = s.name;
+            }
+            
         }
-        //if (meanSum > maxDiff) {
-        //    maxDiff = meanSum;
-        //    maxName = s.name;
+
+        //if (s.name == "d3") {
+        //    imshow("Current"+s.name, currentSquareImg);
+        //    imshow("Diff"+s.name, diffImg);
+        //    cout << "Difference of " << s.name << "=" << totalDiffFactor << endl;
+        //    imshow(s.name, s.img);
         //}
-        if (s.name == "d3") {
-            imshow("Current"+s.name, currentSquareImg);
-            imshow("Diff"+s.name, diffImg);
-            cout << "Difference of " << s.name << "=" << totalDiffFactor << endl;
-            imshow(s.name, s.img);
-        }
-        if (s.name == "a8") {
-            imshow(s.name, diffImg);
-            cout << "Here";
-        }
-        if (!s.isWhite && !s.occupiedByWhite) {
+        //if (s.name == "a8") {
+        //    imshow(s.name, diffImg);
+        //    cout << "Here";
+        //}
+        if (!s.isWhite && !s.occupiedByWhite && s.name != "a7") {
             if (totalDiffFactor > blackThresh) {
                 cout << "Black on black changed: " << s.name << " --> " << totalDiffFactor << endl;
+                changed++;
+            }
+        }
+        else if (s.name == "a7") {
+            if (totalDiffFactor > a7Thresh) {
+                cout << "A7 Changed: " << s.name << " --> " << totalDiffFactor << endl;
                 changed++;
             }
         }
@@ -679,12 +684,40 @@ void trackPieces(VideoCapture& cap, Game& g, Mat& refImg, bool prevPawnTwoAdvanc
         }
 
     }
+    if (changed == 1) {
+        cout << "Only one square changed, retrying..." << endl;
+        return;
+    }
     cout << "\nMax Diff: " << maxDiff << ", maxName=" << maxName << endl;
     cout << "Changed: " << changed << endl;
     if (changed > 3) {
         cout << "View obstructed... trying again" << endl;
         return;
     }
+
+    char p = '0';
+    bool occupiedByWhite = false;
+    for (Square& s : g.squares) {
+        if (s.name == mostChanged.first || s.name == mostChanged.second) {
+            if (s.occupied) {
+                p = s.piece;
+                occupiedByWhite = s.occupiedByWhite;
+
+                s.occupied = false;
+                s.occupiedByWhite = NULL;
+                s.piece = NULL;
+            }
+            else {
+                s.occupied = true;
+                s.occupiedByWhite = occupiedByWhite;
+                s.piece = p;
+            }
+        }
+        s.refreshImg(frame);
+        if (s.occupied) s.showRect(trackImg);
+    }
+
+    refImg = frame;
 
     // Hier bewegte Figuren bestimmen
     // TODO: Refresh square images
@@ -693,12 +726,12 @@ void trackPieces(VideoCapture& cap, Game& g, Mat& refImg, bool prevPawnTwoAdvanc
     // Update vacated square (2 squares for en-passant) use parameters
     // TODO: Support castling
 
-    for (Square& s : g.squares) {
-        //cout << s.name << " occupied: " << s.occupied << " ";
-        if (s.occupied) {
-            s.showRect(trackImg);
-        }
-    }
+    //for (Square& s : g.squares) {
+    //    //cout << s.name << " occupied: " << s.occupied << " ";
+    //    if (s.occupied) {
+    //        s.showRect(trackImg);
+    //    }
+    //}
     imshow("Tracking", trackImg);
 
 }
