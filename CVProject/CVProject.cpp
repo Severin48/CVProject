@@ -1,9 +1,3 @@
-//#include <iostream>
-//#include <opencv2/opencv.hpp>
-//#include <opencv2/imgproc.hpp>
-//#include <opencv2/core/utils/logger.hpp>
-//#include <opencv2/calib3d.hpp>
-//#include <algorithm>
 #include "CVProject.h"
 
 using namespace std;
@@ -89,8 +83,7 @@ Board getBoard(cv::VideoCapture& cap, Mat& refImg, Game& game, vector<double>& r
     cv::Mat linesImg;
     //cap >> linesImg;
     linesImg = getFrame(cap);
-    //resize(linesImg, linesImg, cv::Size(640, 480)); // TODO: Falls resize verwendet wird, Ratio einlesen und dann anpassen. Aber sollte nicht verwendet werden, da es dann überall gemacht
-    // werden müsste
+
     std::vector<cv::Mat> boardFrames;
     int n_boardFrames = 20;
     boardFrames.reserve(n_boardFrames);
@@ -119,8 +112,6 @@ Board getBoard(cv::VideoCapture& cap, Mat& refImg, Game& game, vector<double>& r
         Canny(blurGray, edges, 50, 150);
         //imshow("Edges", edges);
 
-        // https://stackoverflow.com/questions/45322630/how-to-detect-lines-in-opencv --> Auch für Felder nützlich
-
         std::vector<cv::Vec4i> lines;
         // HoughLinesP(edges, lines, 1, CV_PI / 180, 50, 10, 20); // --> Really good, but diagonals in squares
 
@@ -148,16 +139,9 @@ Board getBoard(cv::VideoCapture& cap, Mat& refImg, Game& game, vector<double>& r
             p2 = cv::Point(l[2], l[3]);
             double angle = getAngle(p1, p2); // Calculate angle in radian,  if you need it in degrees just do angle * 180 / PI
 
-            //std::cout << "After - Angle in degrees:\t" << angle * 180 / CV_PI << std::endl;
-
             line(linesImg, p1, p2, cv::Scalar(0, 255, 0), 1, cv::LINE_AA);
 
-            //double leng = sqrt(pow(p2.x - p1.x, 2) + pow(p2.y - p1.y, 2));
             double leng = euclideanDist(p1, p2);
-
-            //std::cout << "p1\tx=" << p1.x << ", y=" << p1.y << std::endl;
-            //std::cout << "p2\tx=" << p2.x << ", y=" << p2.y << std::endl;
-            //std::cout << i << "\tangle=" << angle << "\teuclidean_length=" << leng << std::endl;
 
             int idx = 0;
             if (in_vec_within_tolerance<float>(angle, angles, allowedAngleDeviationRad, idx)) {
@@ -177,8 +161,6 @@ Board getBoard(cv::VideoCapture& cap, Mat& refImg, Game& game, vector<double>& r
     for (int i = 0; i < groupedIndices.size(); i++) {
         std::vector<int> currentIndices = groupedIndices[i];
         double sum = 0;
-
-        //if (currentIndices.size() > 0) std::cout << std::endl << "Angle group " << i + 1 << std::endl;
 
         int actualSize = 0;
         double currentVal;
@@ -221,14 +203,9 @@ Board getBoard(cv::VideoCapture& cap, Mat& refImg, Game& game, vector<double>& r
         }
     }
     if (possibleGroupPairs.size() == 0) {
-        // TODO: (Optional) Andere Parameter müssen berücksichtigt werden. Oder Bild muss so verändert werden, dass perfekte Draufsicht simuliert wird.
-        // Siehe CV_6_GeometrischeOperationen.pdf --> Verzerrung
         return Board();
     }
 
-    // Average coordiante of all points in the two groups --> Mittelpunkt des Bretts --> Linien, welche am nähesten an diesem Punkt sind
-    // -- > Zwei pro Seite-- > Aber Achtung - dürfen nicht auf der selben Seite liegen-- > gegeneinander Distanz checken muss 2 * die Distanz
-    // sein zum Mittelpunkt
     for (std::pair p : possibleGroupPairs) {
         std::vector<cv::Vec4i> boardLimits;
         int total_x = 0;
@@ -330,13 +307,11 @@ Board getBoard(cv::VideoCapture& cap, Mat& refImg, Game& game, vector<double>& r
         //imshow("Filtered Lines", filteredLinesImg);
         cout << "Filtered lines: " << filteredLines.size() << endl;
 
-        // TODO: Use filtered lines + filteredG1Lines + filteredG2Lines
 
         for (auto l : g1LinesFiltered) {
             cv::Point p1 = cv::Point(l[0], l[1]);
             cv::Point p2 = cv::Point(l[2], l[3]);
             distancesToCenterG1.push_back(euclideanDist(midpoint(p1, p2), boardCenter));
-            //std::cout << euclideanDist(midpoint(p1, p2), boardCenter) << std::endl;
         }
 
         for (auto l : g2LinesFiltered) {
@@ -440,7 +415,7 @@ Board getBoard(cv::VideoCapture& cap, Mat& refImg, Game& game, vector<double>& r
         line(dst, corners[3], corners[2], cv::Scalar(255, 255, 0), 1, cv::LINE_AA);
 
         int longestSidePx = min(roi.width, roi.height);
-        int squareLen = roi.width / 8; // Ist nicht schlimm wenn ein paar Pixel übrig bleiben
+        int squareLen = roi.width / 8;
 
         Board b = Board(corners, roi);
         game = Game(b);
@@ -448,49 +423,13 @@ Board getBoard(cv::VideoCapture& cap, Mat& refImg, Game& game, vector<double>& r
         bool properlyRotated = false;
         getSquareData(cap, refImg, game, properlyRotated);
         if (!properlyRotated) {
-            //correctionRotationNeeded = true;
             rotations.push_back(CV_PI / 2.);
             refImg = rotate_image(refImg, CV_PI/2., rotatedCorners);
             getSquareData(cap, refImg, game, properlyRotated);
         }
-        //else { correctionRotationNeeded = false; }
-
-        //line(rotated, rotatedCorners[0], rotatedCorners[1], cv::Scalar(255, 0, 0), 1, cv::LINE_AA);
-        //line(rotated, rotatedCorners[0], rotatedCorners[2], cv::Scalar(0, 255, 0), 1, cv::LINE_AA);
-        //line(rotated, rotatedCorners[3], rotatedCorners[1], cv::Scalar(0, 0, 255), 1, cv::LINE_AA);
-        //line(rotated, rotatedCorners[3], rotatedCorners[2], cv::Scalar(255, 255, 0), 1, cv::LINE_AA);
-
-        //imshow("Rotated", rotated);
         imshow(w_name, dst);
         return Board(corners, roi);
     }
-
-    // TODO: Use groups-pair with smallest distance between their points.
-    // TODO: Throw out picking groups by size --> Only gives information about well-detected lines, not whether they are part of the board.
-
-    // TODO: Jeweils beide Angle Gruppen wieder in Zwei teilen, je nach Seite des Bretts.
-    // Aus diesen zwei Gruppen jeweils zwei Elemente aus unterschiedlichen Gruppen als Paar nehmen und das Paar mit der kleinsten Distanz suchen --> Dieses ist das Paar, welches
-    // die Felder umrandet.
-
-    // TODO: Linien ausweiten, sodass sie sich an den Ecken treffen (optional, wenn ich das bounding rect verwende)
-    // TODO: Rechteck bilden (bounding rect der vier Ausgangslinien)
-    // TODO: Bildbereich auf Brett beschränken!
-
-    // TODO: Bild rotieren, sodass die Ausrichtung stimmt
-    // https://learnopencv.com/image-rotation-and-translation-using-opencv/
-    // Point2f boardCenter((image.cols - 1) / 2.0, (image.rows - 1) / 2.0);
-    // getRotationMatrix2D(boardCenter, angle, scale) - Center kann aus den Brettbegrenzungen errechnet werden oder wie oben
-    // warpAffine(image, rotated_image, rotation_matix, image.size());
-    //imshow("Lines", linesImg);
-    imshow(w_name, dst);
-
-    std::cout << std::endl;
-
-    //--> 4 Linien erkennen, welche Brett bilden --> boundingRect!! --> Testen (imshow) --> Durch Größe der kleineren Felder (Linien) erkennen - Brett-Boundingrect muss
-    //    ca. 8,xxx mal so groß sein wie Feldseite
-
-    // TODO: Works in Debug but not Release --> Detects way more lines (also inner lines) in release --> Could be prevented by first checking for squares
-    // https://stackoverflow.com/questions/36797737/opencv-result-changes-between-debug-release-and-on-other-machine
 
     return Board();
 }
@@ -528,13 +467,12 @@ bool detectPieces(VideoCapture& cap, Game& g, bool& needsFlip, Mat& roiImg) {
             else needsFlip = true;
         }
     }
-    //roiImg = rotNoBorder;
 
     return true;
 }
 
 bool isPawn(Piece p) {
-    if (p.name[0] > '0' && p.name[0] < '9') return true; // TODO: Test
+    if (p.name[0] > '0' && p.name[0] < '9') return true;
     else return false;
 }
 
@@ -546,7 +484,6 @@ void assignPieces(Game& g, Mat& roiImgSrc, bool needsFlip, vector<double>& rotat
         roiImgSrc = rotate_image(roiImgSrc, CV_PI);
     }
 
-    //imshow("After flip", roiImgSrc);
     Mat roiImg = roiImgSrc.clone();
     if (g.pieces.size() > 1) g.pieces.clear();
     for (Square& s : g.squares) {
@@ -586,9 +523,6 @@ void assignPieces(Game& g, Mat& roiImgSrc, bool needsFlip, vector<double>& rotat
 }
 
 void trackPieces(VideoCapture& cap, Game& g, Mat& refImg, bool prevPawnTwoAdvances, char file, vector<double> rotations) {
-    // Pieces markieren mit blauem Rechteck um Squares, welche eine Figur enthalten
-    // + in einer anderen Funktion dann Figuren tracken --> Schleife, in der immer analysiert wird, wo Figuren stehen --> Wenn in einem Frame mehrere fehlen verwerfe Frame
-    // --> Ist wahrscheinlich von Hand verdeckt - es darf nur eine Figur verstellt sein - Bilder von allen anderen machen und schauen ob sie noch ungefähr gleich sind!
     // Einfache Alternative: Jeden Zug mit Enter bestätigen - aus Zeitgründen lieber das machen
     // Art der Figur merken! Und printen z.B. Knight moved from B1 to C3
     // Optional: PGN mit Python verbinden
@@ -618,9 +552,7 @@ void trackPieces(VideoCapture& cap, Game& g, Mat& refImg, bool prevPawnTwoAdvanc
     double a7Thresh = 0.2;
     double totalDiffFactor;
     pair<string, string> mostChanged;
-    //cout << "\n\nDiffs: " << endl;
 
-    // TODO: Zuerst hier noch nichts ändern erst wenn bestätigt ist, dass es nicht von Hand bedeckt ist
     double maxDiff = 0;
     double secondMax = 0;
     int changed = 0;
@@ -637,7 +569,6 @@ void trackPieces(VideoCapture& cap, Game& g, Mat& refImg, bool prevPawnTwoAdvanc
 
         totalDiffFactor = meanSum / (double)s.meanSum;
 
-        //cout << s.name << " --> Total DiffFactor=" << totalDiffFactor << endl;
         if (totalDiffFactor > secondMax) {
             if (totalDiffFactor > maxDiff) {
                 secondMax = maxDiff;
@@ -654,16 +585,6 @@ void trackPieces(VideoCapture& cap, Game& g, Mat& refImg, bool prevPawnTwoAdvanc
             
         }
 
-        //if (s.name == "d3") {
-        //    imshow("Current"+s.name, currentSquareImg);
-        //    imshow("Diff"+s.name, diffImg);
-        //    cout << "Difference of " << s.name << "=" << totalDiffFactor << endl;
-        //    imshow(s.name, s.img);
-        //}
-        //if (s.name == "a8") {
-        //    imshow(s.name, diffImg);
-        //    cout << "Here";
-        //}
         if (!s.isWhite && !s.occupiedByWhite && s.name != "a7") {
             if (totalDiffFactor > blackThresh) {
                 cout << "Black on black changed: " << s.name << " --> " << totalDiffFactor << endl;
@@ -726,12 +647,6 @@ void trackPieces(VideoCapture& cap, Game& g, Mat& refImg, bool prevPawnTwoAdvanc
     // Update vacated square (2 squares for en-passant) use parameters
     // TODO: Support castling
 
-    //for (Square& s : g.squares) {
-    //    //cout << s.name << " occupied: " << s.occupied << " ";
-    //    if (s.occupied) {
-    //        s.showRect(trackImg);
-    //    }
-    //}
     imshow("Tracking", trackImg);
 
 }
@@ -744,12 +659,6 @@ int main()
     cv::Mat frame;
     cv::VideoCapture cap = select_camera();
 
-    // TODO: Möglicher Ersatz für resize calls:
-    //cap.set(3, defaultWidth);
-    //cap.set(4, defaultHeight);
-    //cap.set(cv::CAP_PROP_AUTOFOCUS, 0);
-    // TODO: Test
-
     float fps = 20.f;
     float frame_time = 1000.f / fps;
     int amount_frames = 4;
@@ -759,21 +668,6 @@ int main()
     cv::namedWindow(w_name);
 
     cv::setMouseCallback(w_name, onClickLive, 0);
-
-    //cv::namedWindow("Lines");
-
-    //cv::setMouseCallback("Lines", onClickLines, 0);
-
-    //cv::namedWindow("Rotated");
-    //cv::setMouseCallback("Rotated", onClickLines, 0);
-
-    // 1. Detect board
-    // 2. Detect squares
-    // 3. Determine orientation
-    // 4. Place pieces
-    // 5. Follow pieces
-    
-    //std::this_thread::sleep_for(std::chrono::milliseconds(1000)); // Waiting for the webcam to focus
 
     Mat referenceImg; // Achtung: Könnte Figuren enthalten!
 
@@ -791,11 +685,9 @@ int main()
             bool needsFlip = false;
             bool piecesValid = false;
             piecesValid = detectPieces(cap, g, needsFlip, referenceImg);
-            //imshow("Here", roiImg);
             assignPieces(g, referenceImg, needsFlip, rotations);
             
             if (piecesValid) {
-                //cout << "\nAccept piece analysis? [Enter] - Any other key to discard and try again..." << endl;
                 cout << "\nRestart analysis? [r] - Any other key to keep tracking..." << endl;
                 char key = waitKey(0);
                 if ((char)27 == key) { // Esc-Button
@@ -814,27 +706,13 @@ int main()
                     while ((char)27 != waitKey(400)) {
                         trackPieces(cap, g, referenceImg, prevPawnTwoAdvances, file, rotations);
                     }
-                    //trackPieces(g, referenceImg);
                     return 0;
                 }
-                //if ((char)13 == key) { // Enter key
-                //    cout << "Piece detection accepted." << endl;
-                //    break;
-                //}
-                // TODO: If pressed r: break and set boardAccepted = false + piecesValid = false, press r to restart the process
-                //else {
-                //    cout << "Piece detection discarded. Trying again..." << endl;
-                //    piecesAccepted = false;
-                //}
             }
         }
     }
     
     cap.release();
-
-    //while (cv::waitKey(200)) {
-    //    std::cout << "";
-    //}
 
     std::cout << "Waiting for keypress..." << std::endl;
     cv::waitKey(0);

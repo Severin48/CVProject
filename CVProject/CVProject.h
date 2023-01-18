@@ -357,12 +357,6 @@ cv::VideoCapture select_camera() {
         }
     }
     string videoPath = "C:\\Users\\sever\\OneDrive - bwedu\\6. Semester\\CV\\Labor\\Aufnahmen\\WIN_20230118_10_27_39_Pro.mp4"; 
-    //string videoPath = "C:\\Users\\sever\\OneDrive - bwedu\\6. Semester\\CV\\Labor\\Aufnahmen\\WIN_20230118_10_09_58_Pro.mp4"; 
-    //string videoPath = "C:\\Users\\sever\\OneDrive - bwedu\\6. Semester\\CV\\Labor\\Aufnahmen\\WIN_20230118_10_14_19_Pro.mp4"; 
-    //string videoPath = "C:\\Users\\sever\\OneDrive - bwedu\\6. Semester\\CV\\Labor\\Aufnahmen\\WIN_20221213_20_28_03_Pro.mp4";
-    string videoPath2 = "C:\\Users\\sever\\OneDrive - bwedu\\6. Semester\\CV\\Labor\\Aufnahmen\\WIN_20221213_20_27_35_Pro.mp4";
-    string videoPath3 = "C:\\Users\\sever\\OneDrive - bwedu\\6. Semester\\CV\\Labor\\Aufnahmen\\WIN_20221214_21_16_23_Pro.mp4";
-    string videoPath4 = "C:\\Users\\sever\\OneDrive - bwedu\\6. Semester\\CV\\Labor\\Aufnahmen\\WIN_20221214_21_16_49_Pro.mp4";
 
     cap >> frame;
     Mat grayFrame, binFrame;
