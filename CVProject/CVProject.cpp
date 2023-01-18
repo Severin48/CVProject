@@ -12,7 +12,8 @@ double meanWhite = -1;
 double meanBlack = -1;
 
 
-void getSquareData(VideoCapture& cap, Mat& refImg, Game& g, double squareLen, bool& properlyRotated) {
+void getSquareData(VideoCapture& cap, Mat& refImg, Game& g, int squareLen, bool& properlyRotated) {
+    cout << "Getting square data..." << endl;
     int rowPx, colPx;
     int nCols = 8;
     int nRows = 8;
@@ -23,7 +24,7 @@ void getSquareData(VideoCapture& cap, Mat& refImg, Game& g, double squareLen, bo
     char fileN, rankN;
     Scalar green = Scalar(255, 0, 0);
     Mat rotNoBorder = refImg.clone() - green;
-    //imshow("No green", rotNoBorder);
+    imshow("No green", rotNoBorder);
     int colorSum;
     int minMean = INT_MAX;
     int maxMean = -1;
@@ -38,7 +39,7 @@ void getSquareData(VideoCapture& cap, Mat& refImg, Game& g, double squareLen, bo
             rowPx = (nRows - 1 - row) * squareLen;
             colPx = col * squareLen;
             Rect roi = Rect(Point(colPx, rowPx), Point(colPx + squareLen, rowPx + squareLen));
-            squareImg = rotNoBorder(roi);
+            squareImg = rotNoBorder(roi); // TODO: Possible crash because of roi
             cout << fileN << rankN << " --> " << rowPx << ", " << colPx;
             Scalar meanCol = mean(squareImg);
             colorSum = meanCol[0] + meanCol[1] + meanCol[2];
@@ -512,7 +513,7 @@ bool detectPieces(VideoCapture& cap, Game& g, double rotAngle, bool correctionRo
     Mat squareImg;
     Scalar green = Scalar(255, 0, 0);
     Mat rotNoBorder = rotated_roi.clone() - green;
-    imshow("Detecting Pieces ROI", rotNoBorder);
+    //imshow("Detecting Pieces ROI", rotNoBorder);
 
     int oppositeColorPieceThresh = 60; // Vorsicht wenn weißer Rand dabei ist --> Evtl. lieber weißes Feld mit schwarzer Figur überprüfen
     for (Square s : g.squares) {
@@ -535,12 +536,47 @@ bool detectPieces(VideoCapture& cap, Game& g, double rotAngle, bool correctionRo
     return true;
 }
 
+bool isPawn(Piece p) {
+    if (p.name[0] > '0' && p.name[0] < '9') return true; // TODO: Test
+    else return false;
+}
+
 void assignPieces(Game g, Mat& roiImg, bool needsFlip) {
     cout << "\n\nAssigning pieces to squares..." << endl;
     if (needsFlip) {
         roiImg = rotate_image(roiImg, CV_PI);
     }
     imshow("RoiImg", roiImg);
+    if (g.pieces.size() > 1) g.pieces.clear();
+    for (Square s : g.squares) {
+        if (s.rank == 1) {
+            string pieceName = filePieceMap[s.file];
+            g.pieces.push_back(Piece(pieceName, true));
+            s.occupiedByWhite = true;
+            s.piece = pieceName[0];
+            s.occupied = true;
+        }
+        if (s.rank == 2) {
+            s.occupiedByWhite = true;
+            s.piece = s.file;
+            s.occupied = true;
+            g.pieces.push_back(Piece(s.name, true));
+        }
+        if (s.rank == 7) {
+            s.occupiedByWhite = false;
+            s.piece = s.file;
+            s.occupied = true;
+            g.pieces.push_back(Piece(s.name, false));
+        }
+        if (s.rank == 8) {
+            string pieceName = filePieceMap[s.file];
+            g.pieces.push_back(Piece(pieceName, false));
+            s.occupiedByWhite = false;
+            s.piece = pieceName[0];
+            s.occupied = true;
+        }
+        cout << s.name << ": " << s.piece << " ";
+    }
 
     // TODO: Occupied zuweisen für a1-h2 und a7-h8 + occupiedByWhite regeln dadurch + occupied bei squares
     // + Pieces markieren mit blauem Rechteck um Squares, welche eine Figur enthalten

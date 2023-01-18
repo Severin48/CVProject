@@ -14,6 +14,7 @@ const int defaultHeight = 480;
 const float defaultRatio = (float)defaultWidth / defaultHeight;
 
 map<char, char> fileMap = { {0, 'a'}, {1, 'b'}, {2, 'c'}, {3, 'd'}, {4, 'e'}, {5, 'f'}, {6, 'g'}, {7, 'h'} };
+map<char,string> filePieceMap = { {'a', "R"}, {'b', "N"}, {'c', "B"}, {'d', "Q"}, {'e', "K"}, {'f', "B"}, {'g', "N"}, {'h', "R"}};
 
 
 const std::string w_name = "Live";
@@ -44,14 +45,13 @@ public:
     string name;
     string squareName;
     Point squareTopLeft;
-    bool active;
+    bool active = true;
     bool isWhite;
 
     Piece() {}
 
-    Piece(string squareName, Point squareTopLeft, bool isWhite) {
+    Piece(string squareName, bool isWhite) {
         this->squareName = squareName;
-        this->squareTopLeft = squareTopLeft;
         this->isWhite = isWhite;
     }
 };
@@ -60,7 +60,7 @@ class Square {
 public:
     Point topLeft;
     bool occupied = false;
-    Piece piece;
+    char piece;
     string name;
     Rect rect;
     char file;
