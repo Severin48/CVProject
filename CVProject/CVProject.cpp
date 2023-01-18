@@ -12,7 +12,7 @@ double meanWhite = -1;
 double meanBlack = -1;
 
 
-void getSquareData(VideoCapture& cap, Mat& refImg, Game& g, int squareLen, bool& properlyRotated) {
+void getSquareData(VideoCapture& cap, Mat& refImg, Game& g, bool& properlyRotated) {
     cout << "Getting square data..." << endl;
     int rowPx, colPx;
     int nCols = 8;
@@ -32,13 +32,15 @@ void getSquareData(VideoCapture& cap, Mat& refImg, Game& g, int squareLen, bool&
     bool isWhite = false;
     if (g.squares.size() > 1) { g.squares.clear();}
     int counter = 0;
+    int sqWidth = rotNoBorder.cols / 8;
+    int sqHeight = rotNoBorder.rows / 8;
     for (int row = 0; row < nRows; row++) {
         for (int col = 0; col < nCols; col++) {
             fileN = fileMap[col];
             rankN = (char)(row + 1 + '0');
-            rowPx = (nRows - 1 - row) * squareLen;
-            colPx = col * squareLen;
-            Rect roi = Rect(Point(colPx, rowPx), Point(colPx + squareLen, rowPx + squareLen));
+            rowPx = (nRows - 1 - row) * sqHeight;
+            colPx = col * sqWidth;
+            Rect roi = Rect(Point(colPx, rowPx), Point(colPx + sqWidth, rowPx + sqHeight));
             squareImg = rotNoBorder(roi); // TODO: Possible crash because of roi
             cout << fileN << rankN << " --> " << rowPx << ", " << colPx;
             Scalar meanCol = mean(squareImg);
@@ -50,11 +52,6 @@ void getSquareData(VideoCapture& cap, Mat& refImg, Game& g, int squareLen, bool&
                 isWhite = true;
             }
             else { isWhite = false; }
-            if (row == 3 && col == 3 && !isWhite) {
-                properlyRotated = true;
-                // cout << "Was properly rotated" << endl;
-            }
-            else properlyRotated = false;
             if (row == 3 && col == 4) {
                 if (isWhite) {
                     meanWhite = colorSum;
@@ -72,13 +69,14 @@ void getSquareData(VideoCapture& cap, Mat& refImg, Game& g, int squareLen, bool&
                 if (counter % 2 == 0) { isWhite = false; }
                 else { isWhite = true; }
             }
+            if (row == 3 && col == 3 && !isWhite) {
+                properlyRotated = true;
+                // cout << "Was properly rotated" << endl;
+            }
+            else properlyRotated = false;
             counter++;
         }
     }
-    if (g.squares[0].isWhite) {
-        properlyRotated = false;
-    }
-    else { properlyRotated = true; }
 }
 
 
@@ -438,16 +436,17 @@ Board getBoard(cv::VideoCapture& cap, Mat& refImg, Game& game, double& rotAngle,
         line(dst, corners[3], corners[1], cv::Scalar(0, 0, 255), 1, cv::LINE_AA);
         line(dst, corners[3], corners[2], cv::Scalar(255, 255, 0), 1, cv::LINE_AA);
 
+        int longestSidePx = min(roi.width, roi.height);
         int squareLen = roi.width / 8; // Ist nicht schlimm wenn ein paar Pixel übrig bleiben
 
         Board b = Board(corners, roi);
         game = Game(b);
         bool properlyRotated = false;
-        getSquareData(cap, refImg, game, squareLen, properlyRotated);
+        getSquareData(cap, refImg, game, properlyRotated);
         if (!properlyRotated) {
             correctionRotationNeeded = true;
             refImg = rotate_image(refImg, CV_PI/2., rotatedCorners);
-            getSquareData(cap, refImg, game, squareLen, properlyRotated);
+            getSquareData(cap, refImg, game, properlyRotated);
         }
         else { correctionRotationNeeded = false; }
 
@@ -512,7 +511,8 @@ bool detectPieces(VideoCapture& cap, Game& g, double rotAngle, bool correctionRo
 
     Mat squareImg;
     Scalar green = Scalar(255, 0, 0);
-    Mat rotNoBorder = rotated_roi.clone() - green;
+    Scalar black = Scalar(0, 0, 0);
+    Mat rotNoBorder = rotated_roi.clone() - green - black;
     //imshow("Detecting Pieces ROI", rotNoBorder);
 
     int oppositeColorPieceThresh = 60; // Vorsicht wenn weißer Rand dabei ist --> Evtl. lieber weißes Feld mit schwarzer Figur überprüfen
@@ -549,33 +549,35 @@ void assignPieces(Game g, Mat& roiImg, bool needsFlip) {
     imshow("RoiImg", roiImg);
     if (g.pieces.size() > 1) g.pieces.clear();
     for (Square s : g.squares) {
-        if (s.rank == 1) {
+        if (s.rank == '1') {
             string pieceName = filePieceMap[s.file];
             g.pieces.push_back(Piece(pieceName, true));
             s.occupiedByWhite = true;
             s.piece = pieceName[0];
             s.occupied = true;
         }
-        if (s.rank == 2) {
+        if (s.rank == '2') {
             s.occupiedByWhite = true;
             s.piece = s.file;
             s.occupied = true;
             g.pieces.push_back(Piece(s.name, true));
         }
-        if (s.rank == 7) {
+        if (s.rank == '7') {
             s.occupiedByWhite = false;
             s.piece = s.file;
             s.occupied = true;
             g.pieces.push_back(Piece(s.name, false));
         }
-        if (s.rank == 8) {
+        if (s.rank == '8') {
             string pieceName = filePieceMap[s.file];
             g.pieces.push_back(Piece(pieceName, false));
             s.occupiedByWhite = false;
             s.piece = pieceName[0];
             s.occupied = true;
         }
-        cout << s.name << ": " << s.piece << " ";
+        if (s.piece != NULL) {
+            cout << s.name << ": " << s.piece << " ";
+        }
     }
 
     // TODO: Occupied zuweisen für a1-h2 und a7-h8 + occupiedByWhite regeln dadurch + occupied bei squares
