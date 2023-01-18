@@ -20,10 +20,10 @@ void getSquareData(VideoCapture& cap, Mat& refImg, Game& g, bool& properlyRotate
     int nSquares = 64;
     Mat frame;
     cap >> frame;
-    Mat squareImg;
+    Mat squareImg, squareImgNoGreen;
     char fileN, rankN;
     Scalar green = Scalar(255, 0, 0);
-    Mat rotNoBorder = refImg.clone()- green;
+    Mat rotNoBorder = refImg.clone(); // - green;
     int colorSum;
     int minMean = INT_MAX;
     int maxMean = -1;
@@ -41,8 +41,9 @@ void getSquareData(VideoCapture& cap, Mat& refImg, Game& g, bool& properlyRotate
             colPx = col * sqWidth;
             Rect roi = Rect(Point(colPx, rowPx), Point(colPx + sqWidth, rowPx + sqHeight));
             squareImg = rotNoBorder(roi);
+            squareImgNoGreen = squareImg - green;
             cout << fileN << rankN << " --> " << rowPx << ", " << colPx;
-            Scalar meanCol = mean(squareImg);
+            Scalar meanCol = mean(squareImgNoGreen);
             colorSum = meanCol[0] + meanCol[1] + meanCol[2];
             cout << "\t" << meanCol << ",\tSum=" << colorSum << endl;
             if (colorSum < minMean) { minMean = colorSum; }
@@ -598,55 +599,81 @@ void trackPieces(VideoCapture& cap, Game& g, Mat& refImg, bool prevPawnTwoAdvanc
     while (frame.empty()) {
         cap >> frame;
     }
-    imshow("Frame", frame);
     for (int i = 0; i < rotations.size(); i++) {
         frame = rotate_image(frame, rotations[i]);
         if (i == 0) {
             frame = frame(g.roi);
         }
     }
+    Scalar green = (255, 0, 0);
+    frame = frame - green;
+    imshow("Frame", frame);
     //Mat currentImg = frame(g.roi);
     //imshow("Current", frame);
     Mat currentSquareImg, diffImg;
-    Scalar green = (255, 0, 0);
-    frame = frame - green;
+    Mat currentCopy;
     int meanSum, diff;
-    int blackThresh = 10;
-    int whiteThresh = 80;
+    double blackThresh = 0.07;
+    double whiteThresh = 0.3;
+    double totalDiffFactor;
     //cout << "\n\nDiffs: " << endl;
 
     // TODO: Zuerst hier noch nichts ändern erst wenn bestätigt ist, dass es nicht von Hand bedeckt ist
-    int maxDiff = 0;
+    double maxDiff = 0;
     int changed = 0;
+    double gDiff, bDiff, rDiff, totalDiff;
     string maxName;
     for (Square& s : g.squares) {
         currentSquareImg = frame(s.rect);
-        absdiff(s.img, currentSquareImg, diffImg);
+        currentCopy = currentSquareImg.clone();
+        absdiff(s.img, currentCopy, diffImg);
         threshold(diffImg, diffImg, 80, 255, cv::THRESH_BINARY);
         erode(diffImg, diffImg, cv::getStructuringElement(cv::MORPH_RECT, cv::Size(3, 3)));
         Scalar meanCol = mean(diffImg);
         meanSum = meanCol[0] + meanCol[1] + meanCol[2];
-        if (meanSum > maxDiff) {
-            maxDiff = meanSum;
+
+        //for (int i = 0; i < s.img.rows; i++) {
+        //    for (int j = 0; j < s.img.cols; j++) {
+        //        std::cout << s.img.at<cv::Vec3b>(i, j)[0] << " " << s.img.at<cv::Vec3b>(i, j)[1] << " " << s.img.at<cv::Vec3b>(i, j)[2] << std::endl;
+        //    }
+        //}
+
+        // TODO: Im Verhältnis setzen zu vorherigem Mean!!!!
+        
+        //gDiff = abs(meanCol[0] - s.meanCol[0]);
+        //bDiff = abs(meanCol[1] - s.meanCol[1]);
+        //rDiff = abs(meanCol[2] - s.meanCol[2]);
+        //totalDiff = gDiff + bDiff + rDiff;
+        totalDiffFactor = meanSum / (double)s.meanSum;
+
+        cout << s.name << " --> Total DiffFactor=" << totalDiffFactor << endl;
+        if (totalDiffFactor > maxDiff) {
+            maxDiff = totalDiffFactor;
             maxName = s.name;
         }
-        if (s.name == "a7") {
-            imshow(s.name, diffImg);
-            cout << "Difference of " << s.name << "=" << meanSum << endl;
+        //if (meanSum > maxDiff) {
+        //    maxDiff = meanSum;
+        //    maxName = s.name;
+        //}
+        if (s.name == "d3") {
+            imshow("Current"+s.name, currentSquareImg);
+            imshow("Diff"+s.name, diffImg);
+            cout << "Difference of " << s.name << "=" << totalDiffFactor << endl;
+            imshow(s.name, s.img);
         }
         if (s.name == "a8") {
             imshow(s.name, diffImg);
             cout << "Here";
         }
         if (!s.isWhite && !s.occupiedByWhite) {
-            if (meanSum > blackThresh) {
-                cout << "Black on black changed: " << s.name << endl;
+            if (totalDiffFactor > blackThresh) {
+                cout << "Black on black changed: " << s.name << " --> " << totalDiffFactor << endl;
                 changed++;
             }
         }
         else {
-            if (meanSum > whiteThresh) {
-                cout << "Changed: " << s.name << endl;
+            if (totalDiffFactor > whiteThresh) {
+                cout << "Changed: " << s.name << " --> " << totalDiffFactor << endl;
                 changed++;
             }
         }
