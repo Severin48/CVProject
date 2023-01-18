@@ -52,7 +52,7 @@ void getSquareData(VideoCapture& cap, Mat& refImg, Game& g, bool& properlyRotate
             }
             else { isWhite = false; }
             if (row == 3 && col == 4) {
-                rectangle(rotNoBorder, roi, cv::Scalar(0, 0, 255));
+                //rectangle(rotNoBorder, roi, cv::Scalar(0, 0, 255));
                 if (isWhite) {
                     meanWhite = colorSum;
                     meanBlack = g.squares[g.squares.size() - 1].meanSum;
@@ -75,13 +75,14 @@ void getSquareData(VideoCapture& cap, Mat& refImg, Game& g, bool& properlyRotate
             }
             
             counter++;
-            imshow("No green", rotNoBorder);
+            refImg = rotNoBorder;
+            imshow("No green", refImg);
         }
     }
 }
 
 
-Board getBoard(cv::VideoCapture& cap, Mat& refImg, Game& game, double& rotAngle, bool& correctionRotationNeeded) {
+Board getBoard(cv::VideoCapture& cap, Mat& refImg, Game& game, double& rotAngle) {
     std::cout << std::endl << "Starting board detection..." << std::endl;
     cv::Mat frame, dst;
     cv::Mat linesImg;
@@ -445,11 +446,11 @@ Board getBoard(cv::VideoCapture& cap, Mat& refImg, Game& game, double& rotAngle,
         bool properlyRotated = false;
         getSquareData(cap, refImg, game, properlyRotated);
         if (!properlyRotated) {
-            correctionRotationNeeded = true;
+            //correctionRotationNeeded = true;
             refImg = rotate_image(refImg, CV_PI/2., rotatedCorners);
             getSquareData(cap, refImg, game, properlyRotated);
         }
-        else { correctionRotationNeeded = false; }
+        //else { correctionRotationNeeded = false; }
 
         //line(rotated, rotatedCorners[0], rotatedCorners[1], cv::Scalar(255, 0, 0), 1, cv::LINE_AA);
         //line(rotated, rotatedCorners[0], rotatedCorners[2], cv::Scalar(0, 255, 0), 1, cv::LINE_AA);
@@ -492,7 +493,7 @@ Board getBoard(cv::VideoCapture& cap, Mat& refImg, Game& game, double& rotAngle,
 }
 
 
-bool detectPieces(VideoCapture& cap, Game& g, double rotAngle, bool correctionRotationNeeded, bool& needsFlip, Mat& roiImg) {
+bool detectPieces(VideoCapture& cap, Game& g, double rotAngle, bool& needsFlip, Mat& roiImg) {
     cout << "\nDetecting pieces..." << endl;
     Board b = g.board;
 
@@ -506,15 +507,15 @@ bool detectPieces(VideoCapture& cap, Game& g, double rotAngle, bool correctionRo
     //imshow("Step1", frame);
     //Mat rotated_roi = frame.clone();
     //rotated_roi = rotated_roi(b.roi);
-    if (correctionRotationNeeded) {
-        roiImg = rotate_image(roiImg, CV_PI/2.);
-    }
+    //if (correctionRotationNeeded) {
+    //    roiImg = rotate_image(roiImg, CV_PI/2.);
+    //}
     int colorSum;
 
     Mat squareImg;
     Scalar green = Scalar(255, 0, 0);
     Mat rotNoBorder = roiImg.clone() - green;
-    imshow("Detecting Pieces ROI", rotNoBorder);
+    //imshow("Detecting Pieces ROI", rotNoBorder);
 
     int oppositeColorPieceThresh = 60; // Vorsicht wenn weißer Rand dabei ist --> Evtl. lieber weißes Feld mit schwarzer Figur überprüfen
     for (Square s : g.squares) {
@@ -544,12 +545,11 @@ bool isPawn(Piece p) {
 
 void assignPieces(Game g, Mat& roiImgSrc, bool needsFlip) {
     cout << "\n\nAssigning pieces to squares..." << endl;
-    cout << "Needs flip? " << needsFlip << endl;
-    imshow("Before flip", roiImgSrc);
+    //imshow("Before flip", roiImgSrc);
     if (needsFlip) {
         roiImgSrc = rotate_image(roiImgSrc, CV_PI);
     }
-    imshow("After flip", roiImgSrc);
+    //imshow("After flip", roiImgSrc);
     Mat roiImg = roiImgSrc.clone();
     if (g.pieces.size() > 1) g.pieces.clear();
     for (Square s : g.squares) {
@@ -658,7 +658,7 @@ int main()
     bool piecesAccepted = false;
     while(!ending) {
         while (!b.located) {
-            b = getBoard(cap, referenceImg, g, rotationAngle, correctionNeeded);
+            b = getBoard(cap, referenceImg, g, rotationAngle);
             cv::waitKey(200);
         
             if (b.located) {
@@ -683,7 +683,7 @@ int main()
         bool needsFlip = false;
         bool piecesValid = false;
         while (!piecesAccepted) {
-            piecesValid = detectPieces(cap, g, rotationAngle, correctionNeeded, needsFlip, referenceImg);
+            piecesValid = detectPieces(cap, g, rotationAngle, needsFlip, referenceImg);
             //imshow("Here", roiImg);
             assignPieces(g, referenceImg, needsFlip);
             
