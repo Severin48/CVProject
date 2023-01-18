@@ -60,7 +60,7 @@ class Square {
 public:
     Point topLeft;
     bool occupied = false;
-    char piece;
+    char piece = NULL;
     string name;
     Rect rect;
     char file;
@@ -83,6 +83,15 @@ public:
         this->img = img;
         this->isWhite = isWhite;
         this->meanSum = meanSum;
+    }
+
+    void refreshImg(Mat& boardImg) {
+        this->img = boardImg(this->rect);
+        //imshow(this->name, this->img);
+    }
+
+    void showRect(Mat& targetImg) {
+        rectangle(targetImg, this->rect, Scalar(255, 0, 0));
     }
 };
 

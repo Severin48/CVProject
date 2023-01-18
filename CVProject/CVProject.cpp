@@ -24,7 +24,6 @@ void getSquareData(VideoCapture& cap, Mat& refImg, Game& g, bool& properlyRotate
     char fileN, rankN;
     Scalar green = Scalar(255, 0, 0);
     Mat rotNoBorder = refImg.clone() - green;
-    imshow("No green", rotNoBorder);
     int colorSum;
     int minMean = INT_MAX;
     int maxMean = -1;
@@ -41,7 +40,7 @@ void getSquareData(VideoCapture& cap, Mat& refImg, Game& g, bool& properlyRotate
             rowPx = (nRows - 1 - row) * sqHeight;
             colPx = col * sqWidth;
             Rect roi = Rect(Point(colPx, rowPx), Point(colPx + sqWidth, rowPx + sqHeight));
-            squareImg = rotNoBorder(roi); // TODO: Possible crash because of roi
+            squareImg = rotNoBorder(roi);
             cout << fileN << rankN << " --> " << rowPx << ", " << colPx;
             Scalar meanCol = mean(squareImg);
             colorSum = meanCol[0] + meanCol[1] + meanCol[2];
@@ -53,6 +52,7 @@ void getSquareData(VideoCapture& cap, Mat& refImg, Game& g, bool& properlyRotate
             }
             else { isWhite = false; }
             if (row == 3 && col == 4) {
+                rectangle(rotNoBorder, roi, cv::Scalar(0, 0, 255));
                 if (isWhite) {
                     meanWhite = colorSum;
                     meanBlack = g.squares[g.squares.size() - 1].meanSum;
@@ -69,12 +69,13 @@ void getSquareData(VideoCapture& cap, Mat& refImg, Game& g, bool& properlyRotate
                 if (counter % 2 == 0) { isWhite = false; }
                 else { isWhite = true; }
             }
-            if (row == 3 && col == 3 && !isWhite) {
-                properlyRotated = true;
-                // cout << "Was properly rotated" << endl;
+            if (row == 3 && col == 3) {
+                if (isWhite) properlyRotated = false;
+                else properlyRotated = true;
             }
-            else properlyRotated = false;
+            
             counter++;
+            imshow("No green", rotNoBorder);
         }
     }
 }
@@ -500,20 +501,20 @@ bool detectPieces(VideoCapture& cap, Game& g, double rotAngle, bool correctionRo
     int nCols = 8;
     int nRows = 8;
     int nSquares = 64;
-    Mat frame;
-    cap >> frame; // Now containing pieces
-    Mat rotated_roi = rotate_image(frame, rotAngle);
-    rotated_roi = rotated_roi(b.roi);
+    //Mat frame;
+    //cap >> frame; // Now containing pieces
+    //imshow("Step1", frame);
+    //Mat rotated_roi = frame.clone();
+    //rotated_roi = rotated_roi(b.roi);
     if (correctionRotationNeeded) {
-        rotated_roi = rotate_image(rotated_roi, CV_PI/2.);
+        roiImg = rotate_image(roiImg, CV_PI/2.);
     }
     int colorSum;
 
     Mat squareImg;
     Scalar green = Scalar(255, 0, 0);
-    Scalar black = Scalar(0, 0, 0);
-    Mat rotNoBorder = rotated_roi.clone() - green - black;
-    //imshow("Detecting Pieces ROI", rotNoBorder);
+    Mat rotNoBorder = roiImg.clone() - green;
+    imshow("Detecting Pieces ROI", rotNoBorder);
 
     int oppositeColorPieceThresh = 60; // Vorsicht wenn weißer Rand dabei ist --> Evtl. lieber weißes Feld mit schwarzer Figur überprüfen
     for (Square s : g.squares) {
@@ -541,12 +542,15 @@ bool isPawn(Piece p) {
     else return false;
 }
 
-void assignPieces(Game g, Mat& roiImg, bool needsFlip) {
+void assignPieces(Game g, Mat& roiImgSrc, bool needsFlip) {
     cout << "\n\nAssigning pieces to squares..." << endl;
+    cout << "Needs flip? " << needsFlip << endl;
+    imshow("Before flip", roiImgSrc);
     if (needsFlip) {
-        roiImg = rotate_image(roiImg, CV_PI);
+        roiImgSrc = rotate_image(roiImgSrc, CV_PI);
     }
-    imshow("RoiImg", roiImg);
+    imshow("After flip", roiImgSrc);
+    Mat roiImg = roiImgSrc.clone();
     if (g.pieces.size() > 1) g.pieces.clear();
     for (Square s : g.squares) {
         if (s.rank == '1') {
@@ -575,18 +579,32 @@ void assignPieces(Game g, Mat& roiImg, bool needsFlip) {
             s.piece = pieceName[0];
             s.occupied = true;
         }
+        s.refreshImg(roiImg);
         if (s.piece != NULL) {
             cout << s.name << ": " << s.piece << " ";
+            //s.showRect(roiImg);
         }
     }
+    imshow("RoiImg", roiImg);
+}
 
-    // TODO: Occupied zuweisen für a1-h2 und a7-h8 + occupiedByWhite regeln dadurch + occupied bei squares
-    // + Pieces markieren mit blauem Rechteck um Squares, welche eine Figur enthalten
+void trackPieces(Game& g, Mat& roiImg) {
+    // Pieces markieren mit blauem Rechteck um Squares, welche eine Figur enthalten
     // + in einer anderen Funktion dann Figuren tracken --> Schleife, in der immer analysiert wird, wo Figuren stehen --> Wenn in einem Frame mehrere fehlen verwerfe Frame
     // --> Ist wahrscheinlich von Hand verdeckt - es darf nur eine Figur verstellt sein - Bilder von allen anderen machen und schauen ob sie noch ungefähr gleich sind!
     // Einfache Alternative: Jeden Zug mit Enter bestätigen - aus Zeitgründen lieber das machen
     // Art der Figur merken! Und printen z.B. Knight moved from B1 to C3
     // Optional: PGN mit Python verbinden
+
+    Mat trackImg = roiImg.clone();
+
+    for (Square s : g.squares) {
+        if (s.occupied) {
+            s.showRect(trackImg);
+        }
+    }
+    imshow("Tracking", trackImg);
+
 }
 
 
@@ -620,24 +638,13 @@ int main()
     //cv::namedWindow("Rotated");
     //cv::setMouseCallback("Rotated", onClickLines, 0);
 
-    // TODO: cv::findChessboardCorners() https://docs.opencv.org/4.x/dc/dbb/tutorial_py_calibration.html
-    //cv::namedWindow("ChessCorners");
-    //while (frame.empty()) {
-    //    cap >> frame;
-    //}
-    //bool found = cv::findChessboardCorners(frame, cv::Size(8,8), frame);
-    //if (found) {
-    //    imshow("ChessCorners", frame);
-    //}
-    //std::cout << "Found: " << found << std::endl;
-
     // 1. Detect board
     // 2. Detect squares
     // 3. Determine orientation
     // 4. Place pieces
     // 5. Follow pieces
     
-    std::this_thread::sleep_for(std::chrono::milliseconds(1000)); // Waiting for the webcam to focus
+    //std::this_thread::sleep_for(std::chrono::milliseconds(1000)); // Waiting for the webcam to focus
 
     Mat referenceImg; // Achtung: Könnte Figuren enthalten!
 
@@ -645,6 +652,7 @@ int main()
     Game g = Game();
     double rotationAngle = 0;
     bool correctionNeeded = false;
+    Mat refImg;
 
     bool ending = false;
     bool piecesAccepted = false;
@@ -673,27 +681,36 @@ int main()
             }
         }
         bool needsFlip = false;
-        Mat roiImg;
+        bool piecesValid = false;
         while (!piecesAccepted) {
-            piecesAccepted = detectPieces(cap, g, rotationAngle, correctionNeeded, needsFlip, roiImg);
-            assignPieces(g, roiImg, needsFlip);
-            cv::waitKey(200);
+            piecesValid = detectPieces(cap, g, rotationAngle, correctionNeeded, needsFlip, referenceImg);
+            //imshow("Here", roiImg);
+            assignPieces(g, referenceImg, needsFlip);
             
-            if (piecesAccepted) {
-                cout << "\nAccept piece analysis? [Enter] - Any other key to discard and try again..." << endl;
+            if (piecesValid) {
+                //cout << "\nAccept piece analysis? [Enter] - Any other key to discard and try again..." << endl;
+                cout << "\nRestart analysis? [r] - Any other key to keep tracking..." << endl;
                 char key = waitKey(0);
                 if ((char)27 == key) { // Esc-Button
                     cout << "\nExiting..." << endl;
                     return 0;
                 }
-                if ((char)13 == key) { // Enter key
-                    cout << "Piece detection accepted." << endl;
+                if ((char)114 == key) {
+                    b = Board();
                     break;
                 }
                 else {
-                    cout << "Piece detection discarded. Trying again..." << endl;
-                    piecesAccepted = false;
+                    trackPieces(g, referenceImg);
                 }
+                //if ((char)13 == key) { // Enter key
+                //    cout << "Piece detection accepted." << endl;
+                //    break;
+                //}
+                // TODO: If pressed r: break and set boardAccepted = false + piecesValid = false, press r to restart the process
+                //else {
+                //    cout << "Piece detection discarded. Trying again..." << endl;
+                //    piecesAccepted = false;
+                //}
             }
         }
     }
